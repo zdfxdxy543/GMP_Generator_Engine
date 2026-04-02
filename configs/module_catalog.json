@@ -1,0 +1,23 @@
+{
+  "trajectory": [
+    "ctl_step_ramp_generator",
+    "ctl_step_s_curve_generator"
+  ],
+  "mech": [
+    "ctl_step_mech_ctrl",
+    "ctl_step_vel_pos_ctrl"
+  ],
+  "distributor": [
+    "ctl_step_spm_fw_distributor",
+    "ctl_set_mtr_current_ctrl_ref"
+  ],
+  "current": [
+    "ctl_step_foc_core",
+    "ctl_step_current_controller"
+  ],
+  "observer": [
+    "ctl_step_spd_calculator",
+    "ctl_step_pmsm_fo",
+    "ctl_step_pmsm_esmo"
+  ]
+}

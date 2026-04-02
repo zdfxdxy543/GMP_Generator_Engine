@@ -1,0 +1,53 @@
+{
+  "name": "mutant_1",
+  "params": {
+    "kp": 2.5,
+    "ki": 130.0
+  },
+  "score": 0.16533398974845823,
+  "metrics": {
+    "overshoot": 0.17853398974845822,
+    "settling_time": 0.2585339897484582,
+    "current_ripple": 0.13353398974845823,
+    "steady_state_error": 0.05753398974845823
+  },
+  "layers": [
+    {
+      "name": "trajectory",
+      "module": "ctl_step_ramp_generator",
+      "params": {
+        "jerk_limit": 0.1
+      }
+    },
+    {
+      "name": "mech",
+      "module": "ctl_step_vel_pos_ctrl",
+      "params": {
+        "kp": 2.0,
+        "ki": 1.0
+      }
+    },
+    {
+      "name": "distributor",
+      "module": "ctl_step_spm_fw_distributor",
+      "params": {
+        "id_ref": 0.0
+      }
+    },
+    {
+      "name": "current",
+      "module": "ctl_step_foc_core",
+      "params": {
+        "kp": 2.0,
+        "ki": 100.0
+      }
+    },
+    {
+      "name": "observer",
+      "module": "ctl_step_pmsm_fo",
+      "params": {
+        "lpf_bw": 30.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "overshoot": 0.35,
+  "settling_time": 0.25,
+  "current_ripple": 0.20,
+  "steady_state_error": 0.20
+}

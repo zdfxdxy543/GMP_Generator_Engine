@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gmp-generator-engine"
+version = "0.1.0"
+description = "CLI engine for generating GMP-style motor control programs from natural language requirements."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "GMP Generator Engine Team" }
+]
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+gmp-engine = "gmp_generator_engine.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
