@@ -1,30 +1,30 @@
 {
-  "id": "019d6848879143e755feb3e081361e0b",
+  "id": "019d6a8e60830c91b7e4a984eea18635",
   "object": "chat.completion",
-  "created": 1775571077,
+  "created": 1775609209,
   "model": "deepseek-ai/DeepSeek-V3.2",
   "choices": [
     {
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "```json\n{\n    \"init\": \"ERROR_UNRESOLVED_API(motor_if);\\nERROR_UNRESOLVED_API(mech_ctrl);\\nERROR_UNRESOLVED_API(mtr_ctrl);\\nERROR_UNRESOLVED_API(spwm);\",\n    \"fast_loop\": \"ERROR_UNRESOLVED_API(mech_ctrl);\\nERROR_UNRESOLVED_API(mtr_ctrl);\\nERROR_UNRESOLVED_API(spwm);\",\n    \"slow_loop\": \"\",\n    \"fault\": \"\"\n}\n```"
+        "content": "```json\n{\n    \"init\": \"ctl_step_ptr_adc_channel(&adc_channel_ia);\\nctl_step_ptr_adc_channel(&adc_channel_ib);\\nctl_step_pos_encoder(&encoder, 0);\\nctl_step_spwm_modulator(&pwm_modulator);\",\n    \"fast_loop\": \"ctl_step_current_controller(&current_controller);\\nctl_step_mech_ctrl(&speed_controller);\\nctl_step_mtr_protect_fast(&motor_protection);\",\n    \"slow_loop\": \"\",\n    \"fault\": \"ctl_step_trip_protector(&trip_protector);\"\n}\n```"
       },
       "finish_reason": "stop"
     }
   ],
   "usage": {
-    "prompt_tokens": 2157,
-    "completion_tokens": 117,
-    "total_tokens": 2274,
+    "prompt_tokens": 4452,
+    "completion_tokens": 148,
+    "total_tokens": 4600,
     "completion_tokens_details": {
       "reasoning_tokens": 0
     },
     "prompt_tokens_details": {
-      "cached_tokens": 2048
+      "cached_tokens": 0
     },
-    "prompt_cache_hit_tokens": 2048,
-    "prompt_cache_miss_tokens": 109
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 4452
   },
   "system_fingerprint": ""
 }

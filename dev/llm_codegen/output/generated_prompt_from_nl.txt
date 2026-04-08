@@ -7,18 +7,18 @@ Hard constraints:
 4) Use only function names from api_contract.step/api_contract.attach for each module.
 5) Never invent new API names.
 6) Respect schedule order exactly.
-7) For required fast_loop/slow_loop calls only: if API missing, emit ERROR_UNRESOLVED_API(instance_name).
+7) For required fast_loop/slow_loop calls, emit runnable C statements only; NEVER use ERROR_UNRESOLVED_API placeholders.
 
 Resolved modules JSON:
 [
   {
-    "instance_name": "motor_if",
-    "schedule_hint": "init",
+    "instance_name": "pmsm_motor_params",
+    "schedule_hint": null,
     "params": {},
-    "canonical_id": "MC_INTERFACE__motor_control_interface_motor_universal_interface",
-    "module_id": "MC_INTERFACE",
-    "module_name": "Motor Control Interface",
-    "file": "ctl/component/motor_control/interface/motor_universal_interface.h",
+    "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t",
+    "module_id": "PMSM_GBM2804H_PARAMETERS",
+    "module_name": "Motor Parameters (GBM2804H-100T)",
+    "file": "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -29,51 +29,329 @@ Resolved modules JSON:
         "schedule_hint": "init"
       },
       "step": [],
-      "attach": [
-        {
-          "function": "ctl_attach_mtr_adc_channels",
-          "signature": "ctl_attach_mtr_adc_channels(mtr_ift* mtr, tri_adc_ift* _iabc, tri_adc_ift* _uabc, adc_ift* _idc,\r\n    adc_ift* _udc)"
-        },
-        {
-          "function": "ctl_attach_mtr_current",
-          "signature": "ctl_attach_mtr_current(mtr_ift* mtr, tri_adc_ift* _iabc)"
-        },
-        {
-          "function": "ctl_attach_mtr_position",
-          "signature": "ctl_attach_mtr_position(mtr_ift* mtr, rotation_ift* pos)"
-        },
-        {
-          "function": "ctl_attach_mtr_velocity",
-          "signature": "ctl_attach_mtr_velocity(mtr_ift* mtr, velocity_ift* vel)"
-        },
-        {
-          "function": "ctl_attach_mtr_torque",
-          "signature": "ctl_attach_mtr_torque(mtr_ift* mtr, torque_ift* torque)"
-        }
-      ],
+      "attach": [],
       "io": {
         "inferred_inputs": [],
-        "inferred_outputs": [
-          {
-            "field": "speed",
-            "desc": "@brief Mechanical speed output, in per-unit (p.u.)."
-          },
-          {
-            "field": "torque",
-            "desc": "@brief Mechanical torque output, in per-unit (p.u.)."
-          }
-        ]
+        "inferred_outputs": []
       },
       "confidence": "low"
     }
   },
   {
-    "instance_name": "mech_ctrl",
-    "schedule_hint": "fast_loop",
-    "params": {
-      "speed_limit": 1.0,
-      "cur_limit": 0.3
-    },
+    "instance_name": "inverter_hal",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301",
+    "module_id": "hal_boostxl_drv8301",
+    "module_name": "BOOSTXL-DRV8301 Hardware Abstraction Layer",
+    "file": "ctl/component/hardware_preset/inverter_3ph/TI_BOOSTXL_DRV8301.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "low"
+    }
+  },
+  {
+    "instance_name": "adc_channel_ia",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "file": "ctl/component/interface/adc_ptr_channel.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [
+        {
+          "function": "ctl_step_ptr_adc_channel",
+          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_dual_ptr_adc_channel",
+          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_tri_ptr_adc_channel",
+          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
+          }
+        ],
+        "inferred_outputs": [
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The dual ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The triple ADC data output interface."
+          }
+        ]
+      },
+      "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "adc_channel_ib",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "file": "ctl/component/interface/adc_ptr_channel.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [
+        {
+          "function": "ctl_step_ptr_adc_channel",
+          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_dual_ptr_adc_channel",
+          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_tri_ptr_adc_channel",
+          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
+          }
+        ],
+        "inferred_outputs": [
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The dual ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The triple ADC data output interface."
+          }
+        ]
+      },
+      "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "encoder",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "MC_ENCODER__motor_control_interface_encoder",
+    "module_id": "MC_ENCODER",
+    "module_name": "Encoder Interface",
+    "file": "ctl/component/motor_control/interface/encoder.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [
+        {
+          "function": "ctl_step_pos_encoder",
+          "signature": "ctl_step_pos_encoder(pos_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
+        },
+        {
+          "function": "ctl_step_multiturn_pos_encoder",
+          "signature": "ctl_step_multiturn_pos_encoder(pos_multiturn_encoder_t* enc, uint32_t raw,\r\n                                                         int32_t revolutions)",
+          "direct_inputs": [
+            "uint32_t raw",
+            "int32_t revolutions"
+          ]
+        },
+        {
+          "function": "ctl_step_autoturn_pos_encoder",
+          "signature": "ctl_step_autoturn_pos_encoder(pos_autoturn_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
+        },
+        {
+          "function": "ctl_step_spd_calc",
+          "signature": "ctl_step_spd_calc(spd_calculator_t* sc)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": [
+          {
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard velocity interface for output."
+          }
+        ]
+      },
+      "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "pwm_modulator",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator",
+    "module_id": "CTL_TP_MODULATION_API",
+    "module_name": "Three-Phase Modulation API",
+    "file": "ctl/component/interface/spwm_modulator.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [
+        {
+          "function": "ctl_step_spwm_modulator",
+          "signature": "ctl_step_spwm_modulator(spwm_modulator_t* mod)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_svpwm_modulator",
+          "signature": "ctl_step_svpwm_modulator(spwm_modulator_t* mod)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "current_controller",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core",
+    "module_id": "CURRENT_CONTROLLER",
+    "module_name": "FOC Current Controller",
+    "file": "ctl/component/motor_control/current_loop/foc_core.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_current_controller",
+          "signature": "ctl_step_current_controller(mtr_current_ctrl_t* mc)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_current_ctrl_port",
+          "signature": "ctl_attach_mtr_current_ctrl_port(mtr_current_ctrl_t* mc, tri_adc_ift* _iabc, adc_ift* _udc,\r\n                                                        rotation_ift* _pos_if, velocity_ift* _vec_if)"
+        },
+        {
+          "function": "ctl_attach_mtr_current_ctrl_phasor",
+          "signature": "ctl_attach_mtr_current_ctrl_phasor(mtr_current_ctrl_t* mc, ctl_vector2_t* _phasor)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "speed_controller",
+    "schedule_hint": null,
+    "params": {},
     "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
     "module_id": "MECHANICAL_CONTROLLER",
     "module_name": "Mechanical Loop Controller (PU System)",
@@ -113,16 +391,13 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "mtr_ctrl",
-    "schedule_hint": "fast_loop",
-    "params": {
-      "voltage_limit_max": 0.95,
-      "voltage_limit_min": -0.95
-    },
-    "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core",
-    "module_id": "CURRENT_CONTROLLER",
-    "module_name": "FOC Current Controller",
-    "file": "ctl/component/motor_control/current_loop/foc_core.h",
+    "instance_name": "motor_protection",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION",
+    "module_name": "mtr_protection",
+    "file": "ctl/component/motor_control/basic/mtr_protection.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -130,23 +405,19 @@ Resolved modules JSON:
           "attach(optional)",
           "step"
         ],
-        "schedule_hint": "fast_loop"
+        "schedule_hint": "fault"
       },
       "step": [
         {
-          "function": "ctl_step_current_controller",
-          "signature": "ctl_step_current_controller(mtr_current_ctrl_t* mc)",
+          "function": "ctl_step_mtr_protect_fast",
+          "signature": "ctl_step_mtr_protect_fast(ctl_mtr_protect_t* prot)",
           "direct_inputs": []
         }
       ],
       "attach": [
         {
-          "function": "ctl_attach_mtr_current_ctrl_port",
-          "signature": "ctl_attach_mtr_current_ctrl_port(mtr_current_ctrl_t* mc, tri_adc_ift* _iabc, adc_ift* _udc,\r\n                                                        rotation_ift* _pos_if, velocity_ift* _vec_if)"
-        },
-        {
-          "function": "ctl_attach_mtr_current_ctrl_phasor",
-          "signature": "ctl_attach_mtr_current_ctrl_phasor(mtr_current_ctrl_t* mc, ctl_vector2_t* _phasor)"
+          "function": "ctl_attach_mtr_protect_port",
+          "signature": "ctl_attach_mtr_protect_port(ctl_mtr_protect_t* prot, ctrl_gt* u_dc, ctl_vector2_t* i_meas, ctl_vector2_t* i_ref,\r\n                                 adc_ift* mtr_temp, adc_ift* inv_temp)"
         }
       ],
       "io": {
@@ -157,13 +428,13 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "spwm",
-    "schedule_hint": "fast_loop",
+    "instance_name": "trip_protector",
+    "schedule_hint": null,
     "params": {},
-    "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator",
-    "module_id": "CTL_TP_MODULATION_API",
-    "module_name": "Three-Phase Modulation API",
-    "file": "ctl/component/interface/spwm_modulator.h",
+    "canonical_id": "trip_protector__intrinsic_protection_itoc_protection",
+    "module_id": "trip_protector",
+    "module_name": "Three-Stage Trip Protector",
+    "file": "ctl/component/intrinsic/protection/itoc_protection.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -171,17 +442,12 @@ Resolved modules JSON:
           "attach(optional)",
           "step"
         ],
-        "schedule_hint": "init"
+        "schedule_hint": "fault"
       },
       "step": [
         {
-          "function": "ctl_step_spwm_modulator",
-          "signature": "ctl_step_spwm_modulator(spwm_modulator_t* mod)",
-          "direct_inputs": []
-        },
-        {
-          "function": "ctl_step_svpwm_modulator",
-          "signature": "ctl_step_svpwm_modulator(spwm_modulator_t* mod)",
+          "function": "ctl_step_trip_protector",
+          "signature": "ctl_step_trip_protector(ctl_trip_protector_t* prot)",
           "direct_inputs": []
         }
       ],
@@ -196,42 +462,71 @@ Resolved modules JSON:
 ]
 
 Allowed function names JSON:
-["ctl_attach_mech_ctrl", "ctl_attach_mtr_adc_channels", "ctl_attach_mtr_current", "ctl_attach_mtr_current_ctrl_phasor", "ctl_attach_mtr_current_ctrl_port", "ctl_attach_mtr_position", "ctl_attach_mtr_torque", "ctl_attach_mtr_velocity", "ctl_step_current_controller", "ctl_step_mech_ctrl", "ctl_step_mech_ctrl_pip", "ctl_step_spwm_modulator", "ctl_step_svpwm_modulator"]
+["ctl_attach_mech_ctrl", "ctl_attach_mtr_current_ctrl_phasor", "ctl_attach_mtr_current_ctrl_port", "ctl_attach_mtr_protect_port", "ctl_step_autoturn_pos_encoder", "ctl_step_current_controller", "ctl_step_dual_ptr_adc_channel", "ctl_step_mech_ctrl", "ctl_step_mech_ctrl_pip", "ctl_step_mtr_protect_fast", "ctl_step_multiturn_pos_encoder", "ctl_step_pos_encoder", "ctl_step_ptr_adc_channel", "ctl_step_spd_calc", "ctl_step_spwm_modulator", "ctl_step_svpwm_modulator", "ctl_step_tri_ptr_adc_channel", "ctl_step_trip_protector"]
 
 Links JSON:
 [
   {
-    "from": "motor_if.speed",
-    "to": "mech_ctrl.vel_feedback",
-    "signal": "speed_pu"
+    "from": "adc_channel_ia",
+    "to": "current_controller",
+    "signal": "ia_measured"
   },
   {
-    "from": "mech_ctrl.iq_ref",
-    "to": "mtr_ctrl.current_ref_q",
-    "signal": "iq_ref"
+    "from": "adc_channel_ib",
+    "to": "current_controller",
+    "signal": "ib_measured"
   },
   {
-    "from": "mtr_ctrl.vab0",
-    "to": "spwm.vab0_in",
-    "signal": "vab0"
+    "from": "encoder",
+    "to": "current_controller",
+    "signal": "theta_mech"
+  },
+  {
+    "from": "encoder",
+    "to": "speed_controller",
+    "signal": "speed_feedback"
+  },
+  {
+    "from": "speed_controller",
+    "to": "current_controller",
+    "signal": "iq_reference"
+  },
+  {
+    "from": "current_controller",
+    "to": "pwm_modulator",
+    "signal": "v_alpha_beta"
+  },
+  {
+    "from": "motor_protection",
+    "to": "current_controller",
+    "signal": "fault_status"
+  },
+  {
+    "from": "trip_protector",
+    "to": "motor_protection",
+    "signal": "trip_signal"
   }
 ]
 
 Schedule JSON:
 {
   "init": [
-    "motor_if",
-    "mech_ctrl",
-    "mtr_ctrl",
-    "spwm"
+    "pmsm_motor_params",
+    "inverter_hal",
+    "adc_channel_ia",
+    "adc_channel_ib",
+    "encoder",
+    "pwm_modulator"
   ],
   "fast_loop": [
-    "mech_ctrl",
-    "mtr_ctrl",
-    "spwm"
+    "current_controller",
+    "speed_controller",
+    "motor_protection"
   ],
   "slow_loop": [],
-  "fault": []
+  "fault": [
+    "trip_protector"
+  ]
 }
 
 Output JSON template:

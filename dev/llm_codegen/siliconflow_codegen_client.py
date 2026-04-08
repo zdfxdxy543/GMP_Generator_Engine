@@ -9,8 +9,8 @@ import urllib.request
 from collections import defaultdict
 from datetime import datetime
 
-DEFAULT_MODEL = "deepseek-ai/DeepSeek-V3.2"
-DEFAULT_BASE_URL = "https://api.siliconflow.cn/v1"
+from llm_settings import default_settings_path, read_llm_settings, resolve_api_key
+
 DEFAULT_SYSTEM_PROMPT = (
     "You are an expert embedded control code generator. "
     "Generate deterministic C function-body logic only, no declarations or definitions. "
@@ -24,6 +24,16 @@ FORBIDDEN_PHRASES = [
     "todo",
     "tbd",
 ]
+
+C_KEYWORDS = {
+    "if",
+    "else",
+    "for",
+    "while",
+    "switch",
+    "return",
+    "sizeof",
+}
 
 
 def read_json(path: str):
@@ -172,7 +182,7 @@ def build_user_prompt(control: dict, resolved_modules: list, extra_instruction: 
         + "4) Use only function names from api_contract.step/api_contract.attach for each module.\n"
         + "5) Never invent new API names.\n"
         + "6) Respect schedule order exactly.\n"
-        + "7) For required fast_loop/slow_loop calls only: if API missing, emit ERROR_UNRESOLVED_API(instance_name).\n\n"
+        + "7) For required fast_loop/slow_loop calls, emit runnable C statements only; NEVER use ERROR_UNRESOLVED_API placeholders.\n\n"
         + "Resolved modules JSON:\n"
         + compact_modules
         + "\n\n"
@@ -332,11 +342,13 @@ def quality_gate(rendered_c: str, sections: dict, control: dict, resolved_module
     for phrase in FORBIDDEN_PHRASES:
         if phrase in lower:
             raise RuntimeError(f"forbidden phrase in output: {phrase}")
+    if "ERROR_UNRESOLVED_API(" in rendered_c:
+        raise RuntimeError("non-runnable output: contains ERROR_UNRESOLVED_API placeholder")
 
     by_instance = {m["instance_name"]: m for m in resolved_modules}
     schedule = control.get("schedule") or {}
 
-    allowed_fn = set(["ERROR_UNRESOLVED_API"])
+    allowed_fn = set()
     for mod in resolved_modules:
         api = mod.get("api_contract") or {}
         for x in api.get("step") or []:
@@ -352,8 +364,12 @@ def quality_gate(rendered_c: str, sections: dict, control: dict, resolved_module
         # Match C-like function call names.
         return re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", text)
 
-    for phase_name, phase_text in sections.items():
+    # Only enforce strict API whitelist on loop phases.
+    for phase_name in ("fast_loop", "slow_loop"):
+        phase_text = sections.get(phase_name, "")
         for fn in _find_calls(phase_text):
+            if fn in C_KEYWORDS:
+                continue
             if fn not in allowed_fn:
                 raise RuntimeError(f"illegal function call in {phase_name}: {fn}")
 
@@ -374,14 +390,14 @@ def quality_gate(rendered_c: str, sections: dict, control: dict, resolved_module
                 )
 
 
-def _pick_autocall(step_items: list, instance_name: str) -> str:
+def _pick_autocall(step_items: list, instance_name: str) -> str | None:
     for step in step_items:
         fn = step.get("function")
         sig = step.get("signature") or ""
         # Prefer single-pointer-argument functions, safe for &instance calling.
-        if fn and re.match(r"^\w+\([^,]*\*[^,]*\)$", sig):
+        if fn and re.match(r"^\w+\s*\([^,]*\*[^,]*\)\s*$", sig):
             return f"{fn}(&{instance_name});"
-    return f"ERROR_UNRESOLVED_API({instance_name});"
+    return None
 
 
 def ensure_required_calls(sections: dict, control: dict, resolved_modules: list) -> dict:
@@ -396,8 +412,7 @@ def ensure_required_calls(sections: dict, control: dict, resolved_modules: list)
         for inst in schedule.get(phase) or []:
             mod = by_instance.get(inst)
             if not mod:
-                lines.append(f"ERROR_UNRESOLVED_API({inst});")
-                continue
+                raise RuntimeError(f"scheduled instance not resolved: {inst}")
 
             step_items = (mod.get("api_contract") or {}).get("step") or []
             expected_names = [x.get("function") for x in step_items if x.get("function")]
@@ -405,9 +420,14 @@ def ensure_required_calls(sections: dict, control: dict, resolved_modules: list)
                 continue
 
             if step_items:
-                lines.append(_pick_autocall(step_items, inst))
+                stmt = _pick_autocall(step_items, inst)
+                if not stmt:
+                    raise RuntimeError(
+                        f"non-runnable step API for scheduled instance: {inst}; cannot auto-generate safe call"
+                    )
+                lines.append(stmt)
             else:
-                lines.append(f"ERROR_UNRESOLVED_API({inst});")
+                raise RuntimeError(f"no step api for scheduled loop instance: {inst}")
 
         repaired[phase] = "\n".join(lines)
 
@@ -419,37 +439,16 @@ def sanitize_sections(sections: dict, control: dict, resolved_modules: list) -> 
     by_instance = {m["instance_name"]: m for m in resolved_modules}
     schedule = control.get("schedule") or {}
 
-    # init phase: drop unresolved placeholders to keep output close to ctl_main style.
+    # init phase: keep only non-empty lines.
     init_lines = []
     for line in (cleaned.get("init") or "").splitlines():
-        if "ERROR_UNRESOLVED_API(" in line:
-            continue
         init_lines.append(line)
     cleaned["init"] = "\n".join([x for x in init_lines if x.strip()])
 
-    # fast/slow phase: if a valid step call exists for an instance, remove unresolved line for that instance.
+    # fast/slow phase: compact blank lines only.
     for phase in ("fast_loop", "slow_loop"):
         text = cleaned.get(phase) or ""
-        lines = text.splitlines()
-
-        valid_called = set()
-        for inst in schedule.get(phase) or []:
-            mod = by_instance.get(inst)
-            if not mod:
-                continue
-            step_items = (mod.get("api_contract") or {}).get("step") or []
-            names = [x.get("function") for x in step_items if x.get("function")]
-            if any(name in text for name in names):
-                valid_called.add(inst)
-
-        out_lines = []
-        for line in lines:
-            m = re.search(r"ERROR_UNRESOLVED_API\(([^)]+)\)", line)
-            if m and m.group(1).strip() in valid_called:
-                continue
-            out_lines.append(line)
-
-        cleaned[phase] = "\n".join([x for x in out_lines if x.strip()])
+        cleaned[phase] = "\n".join([x for x in text.splitlines() if x.strip()])
 
     return cleaned
 
@@ -459,6 +458,7 @@ def main():
     parser.add_argument("--control", required=True, help="Path to control structure JSON")
     parser.add_argument("--kb", required=True, help="Path to v2 knowledge base JSON")
     parser.add_argument("--out", required=True, help="Output C body file path")
+    parser.add_argument("--llm-config", default=default_settings_path(), help="Path to LLM settings JSON")
     parser.add_argument("--raw", default="", help="Optional path to save raw response JSON")
     parser.add_argument("--prompt-out", default="", help="Optional path to save final user prompt")
     parser.add_argument(
@@ -468,16 +468,23 @@ def main():
         help="Output rendering profile",
     )
     parser.add_argument("--extra", default="", help="Extra instruction for this generation")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model name")
-    parser.add_argument("--base-url", default=os.getenv("SILICONFLOW_BASE_URL", DEFAULT_BASE_URL), help="SiliconFlow base URL")
-    parser.add_argument("--temperature", type=float, default=0.2, help="Sampling temperature")
-    parser.add_argument("--timeout", type=int, default=180, help="HTTP timeout seconds")
-    parser.add_argument("--system", default=DEFAULT_SYSTEM_PROMPT, help="System prompt")
+    parser.add_argument("--model", default="", help="Model name (overrides llm config)")
+    parser.add_argument("--base-url", default="", help="SiliconFlow base URL (overrides llm config)")
+    parser.add_argument("--temperature", type=float, default=None, help="Sampling temperature (overrides llm config)")
+    parser.add_argument("--timeout", type=int, default=None, help="HTTP timeout seconds (overrides llm config)")
+    parser.add_argument("--system", default="", help="System prompt (overrides llm config)")
     args = parser.parse_args()
 
-    api_key = os.getenv("SILICONFLOW_API_KEY") or os.getenv("OPENAI_API_KEY")
+    llm_cfg = read_llm_settings(args.llm_config)
+    model = args.model or str(llm_cfg.get("model") or "")
+    base_url = args.base_url or str(llm_cfg.get("base_url") or "")
+    temperature = args.temperature if args.temperature is not None else float(llm_cfg.get("temperature") or 0.0)
+    timeout = args.timeout if args.timeout is not None else int(llm_cfg.get("timeout") or 180)
+    system_prompt = args.system or str((llm_cfg.get("system_prompts") or {}).get("codegen") or DEFAULT_SYSTEM_PROMPT)
+
+    api_key = resolve_api_key(llm_cfg)
     if not api_key:
-        print("ERROR: Missing SILICONFLOW_API_KEY (or OPENAI_API_KEY).", file=sys.stderr)
+        print("ERROR: Missing api_key in llm_settings.json (or SILICONFLOW_API_KEY/OPENAI_API_KEY).", file=sys.stderr)
         return 2
 
     control = read_json(args.control)
@@ -492,12 +499,12 @@ def main():
 
     resp_json = call_chat(
         api_key=api_key,
-        base_url=args.base_url,
-        model=args.model,
-        system_prompt=args.system,
+        base_url=base_url,
+        model=model,
+        system_prompt=system_prompt,
         user_prompt=user_prompt,
-        temperature=args.temperature,
-        timeout=args.timeout,
+        temperature=temperature,
+        timeout=timeout,
     )
 
     text = extract_text(resp_json)
@@ -529,7 +536,7 @@ def main():
             json.dump(resp_json, f, ensure_ascii=False, indent=2)
 
     print("Generation success")
-    print(f"Model: {args.model}")
+    print(f"Model: {model}")
     print(f"Output: {args.out}")
     if args.raw:
         print(f"Raw: {args.raw}")

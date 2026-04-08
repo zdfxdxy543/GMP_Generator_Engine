@@ -1,72 +1,111 @@
 {
   "project": {
-    "name": "nl_pmsm_speed_demo",
+    "name": "PMSM_Speed_Control",
     "target": "GMP_CTL",
-    "notes": "Generated from natural language instruction",
-    "generated_at": "2026-04-07T22:11:14.220040"
+    "notes": "永磁同步电机速度控制程序",
+    "generated_at": "2026-04-08T08:46:12.544004"
   },
   "modules": [
     {
-      "instance_name": "motor_if",
-      "canonical_id": "MC_INTERFACE__motor_control_interface_motor_universal_interface",
-      "params": {},
-      "schedule_hint": "init"
+      "instance_name": "pmsm_motor_params",
+      "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t"
     },
     {
-      "instance_name": "mech_ctrl",
-      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
-      "params": {
-        "speed_limit": 1.0,
-        "cur_limit": 0.3
-      },
-      "schedule_hint": "fast_loop"
+      "instance_name": "inverter_hal",
+      "canonical_id": "hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301"
     },
     {
-      "instance_name": "mtr_ctrl",
-      "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core",
-      "params": {
-        "voltage_limit_max": 0.95,
-        "voltage_limit_min": -0.95
-      },
-      "schedule_hint": "fast_loop"
+      "instance_name": "adc_channel_ia",
+      "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel"
     },
     {
-      "instance_name": "spwm",
-      "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator",
-      "params": {},
-      "schedule_hint": "fast_loop"
+      "instance_name": "adc_channel_ib",
+      "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel"
+    },
+    {
+      "instance_name": "encoder",
+      "canonical_id": "MC_ENCODER__motor_control_interface_encoder"
+    },
+    {
+      "instance_name": "pwm_modulator",
+      "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator"
+    },
+    {
+      "instance_name": "current_controller",
+      "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core"
+    },
+    {
+      "instance_name": "speed_controller",
+      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl"
+    },
+    {
+      "instance_name": "motor_protection",
+      "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection"
+    },
+    {
+      "instance_name": "trip_protector",
+      "canonical_id": "trip_protector__intrinsic_protection_itoc_protection"
     }
   ],
   "links": [
     {
-      "from": "motor_if.speed",
-      "to": "mech_ctrl.vel_feedback",
-      "signal": "speed_pu"
+      "from": "adc_channel_ia",
+      "to": "current_controller",
+      "signal": "ia_measured"
     },
     {
-      "from": "mech_ctrl.iq_ref",
-      "to": "mtr_ctrl.current_ref_q",
-      "signal": "iq_ref"
+      "from": "adc_channel_ib",
+      "to": "current_controller",
+      "signal": "ib_measured"
     },
     {
-      "from": "mtr_ctrl.vab0",
-      "to": "spwm.vab0_in",
-      "signal": "vab0"
+      "from": "encoder",
+      "to": "current_controller",
+      "signal": "theta_mech"
+    },
+    {
+      "from": "encoder",
+      "to": "speed_controller",
+      "signal": "speed_feedback"
+    },
+    {
+      "from": "speed_controller",
+      "to": "current_controller",
+      "signal": "iq_reference"
+    },
+    {
+      "from": "current_controller",
+      "to": "pwm_modulator",
+      "signal": "v_alpha_beta"
+    },
+    {
+      "from": "motor_protection",
+      "to": "current_controller",
+      "signal": "fault_status"
+    },
+    {
+      "from": "trip_protector",
+      "to": "motor_protection",
+      "signal": "trip_signal"
     }
   ],
   "schedule": {
     "init": [
-      "motor_if",
-      "mech_ctrl",
-      "mtr_ctrl",
-      "spwm"
+      "pmsm_motor_params",
+      "inverter_hal",
+      "adc_channel_ia",
+      "adc_channel_ib",
+      "encoder",
+      "pwm_modulator"
     ],
     "fast_loop": [
-      "mech_ctrl",
-      "mtr_ctrl",
-      "spwm"
+      "current_controller",
+      "speed_controller",
+      "motor_protection"
     ],
     "slow_loop": [],
-    "fault": []
+    "fault": [
+      "trip_protector"
+    ]
   }
 }

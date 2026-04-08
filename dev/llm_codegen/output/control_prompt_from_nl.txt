@@ -1,0 +1,1337 @@
+Task: Build a strict control structure JSON from a natural-language controller requirement.
+You must infer modules, control-loop hierarchy, and inter-module links.
+Output constraints:
+1) Return STRICT JSON object only, no markdown, no prose.
+2) Root keys must be exactly: project, modules, links, schedule.
+3) modules[*] must include: instance_name and either canonical_id or module_id.
+4) schedule must include: init, fast_loop, slow_loop, fault (arrays of instance_name).
+5) links describe signal/data flow between modules, especially control-loop relationships.
+6) Prefer canonical_id from KB whenever possible.
+7) Do not invent canonical_id/module_id not present in the KB.
+8) Keep instance_name C-identifier compliant.
+9) project.target must be GMP_CTL.
+
+10) All canonical_id values MUST be selected from the provided ALLOWED_CANONICAL_IDS list.
+11) Modules in fast_loop/slow_loop MUST use canonical_id from RUNNABLE_LOOP_CANONICAL_IDS only.
+12) Do NOT place library/aggregate modules (e.g., *_LIB, intrinsic root, digital_power root) into fast_loop/slow_loop.
+
+Natural-language requirement:
+生成永磁同步电机速度控制程序
+
+ALLOWED_CANONICAL_IDS (full whitelist):
+["ACM_4P24V_PARAMETERS__hardware_preset_acm_motor_acm_4p24v", "ADAPTIVE_CONTROLLER__intrinsic_advance_mrac", "ADC_BIAS_MODELS__interface_bias_model", "ADC_GAIN_MODELS__interface_gain_model", "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel", "ADC_SINGLE_CHANNEL__interface_adc_channel", "AUTO_CTL_COMPONENT_HARDWARE_PRESET_CURRENT_SENSOR_TMCS1133__hardware_preset_current_sensor_tmcs1133", "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_3PH_GMP_3PH_2136SINV_DUAL_TMPL__hardware_preset_inverter_3ph_gmp_3ph_2136sinv_dual_tmpl", "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_3PH__CONTROLLER_PRESET_TEMPLATE__hardware_preset_inverter_3ph_controller_preset_template", "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_HB_GMP_LVHB_V1__hardware_preset_inverter_hb_gmp_lvhb_v1", "AUTO_CTL_COMPONENT_HARDWARE_PRESET_PMASRM_MOTOR_PMASRM15KW_CURRENT_DISTRIBUTOR_LUT__hardware_preset_pmasrm_motor_pmasrm15kw_current_distributor_lut", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_CONSULTANT_UNIT_CONSULTANT__motor_control_consultant_unit_consultant", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_INTERFACE_ENCODER_SWITCHER__motor_control_interface_encoder_switcher", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_SOGI_TRAJ__motor_control_motion_sogi_traj", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_S_CURVE_TRAJ__motor_control_motion_s_curve_traj", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_TRAPEZOIDAL_TRAJ__motor_control_motion_trapezoidal_traj", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_OBSERVER_ATO_PLL__motor_control_observer_ato_pll", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_PMSM_OFFLINE_ID_PMSM_OFFLINE_ID_SM__motor_control_pmsm_offline_id_pmsm_offline_id_sm", "BACKSTEPPING_CONTROLLER__intrinsic_advance_back_stepping", "BIQUAD_filter_api__intrinsic_discrete_biquad_filter", "BLDC_ZCD_OBS__motor_control_observer_bldc_zcd_obs", "CONST_CURRENT_DISTRIBUTOR__motor_control_distributor_ipm_fw_distributor", "CONSULTANT_IM__motor_control_consultant_acim_consultant", "CONSULTANT_INVERTER__motor_control_consultant_inverter_consultant", "CONSULTANT_MECH__motor_control_consultant_mech_consultant", "CONSULTANT_NAMEPLATE__motor_control_consultant_nameplate_consultant", "CONSULTANT_PMSM__motor_control_consultant_pmsm_consultant", "CONSULTANT_PU__motor_control_consultant_pu_consultant", "CTL_BASIC_VIRTUAL_IMP__digital_power_basic_virtual_imp", "CTL_BUCKBOOST_API__digital_power_dcdc_buckboost", "CTL_DP_LIB__digital_power", "CTL_DSA_LIB__dsa", "CTL_INTRINSIC_LIB__intrinsic", "CTL_MC_LIB__motor_control", "CTL_PLL_API__digital_power_inv_pll_ddsrf", "CTL_PLL_API__digital_power_inv_pll_dsogi", "CTL_PLL_API__digital_power_inv_pll_srf", "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_gfl_pq_ctrl", "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_inv_hcm", "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_inv_neg_ctrl", "CTL_TOPOLOGY_INV_H_API__digital_power_inv_gfl_core", "CTL_TOPOLOGY_INV_H_API__digital_power_inv_gfm_droop", "CTL_TOPOLOGY_SINV_H_API__digital_power_sinv_sinv_core", "CTL_TP_MODULATION_API__interface_npc_modulator", "CTL_TP_MODULATION_API__interface_spwm_modulator", "CTL_VIENNA_PFC_API__digital_power_rectifier_vienna", "CURRENT_CONTROLLER__motor_control_current_loop_foc_core", "ConstFGen__motor_control_basic_vf_generator", "DAC_CHANNEL__interface_dac_channel", "DATA_LOGGER_4CH__dsa_ti_dlog_dlog_4ch_f", "DSA_TRIGGER__dsa_dsa_trigger", "DTC_SVM_CONTROLLER__motor_control_current_loop_dtc_svm_core", "EncoderCalibrate__motor_control_basic_encoder_calibrate", "GMP_CTL_INTERFACES__interface_interface_base", "HW_BOARD_PARAMETERS_2136SINV__hardware_preset_inverter_3ph_gmp_3ph_2136sinv_dual", "ILC_CONTROLLER__intrinsic_advance_ilc", "IMC_CONTROLLER__intrinsic_advance_imc", "IM_FLUX_OBSERVER__motor_control_observer_acim_fo", "IM_IFOC_CONTROLLER__motor_control_current_loop_imfoc_core", "IM_POS_CALC__motor_control_observer_acim_pos_calc", "IM_SMO__motor_control_observer_acim_smo", "KNOB_POSITION_LOOP__motor_control_motion_knob_pos_loop", "LADRC1__intrinsic_continuous_ladrc1", "LADRC2__intrinsic_continuous_ladrc2", "LADRC_POS_CONTROLLER__motor_control_mechanical_loop_ladrc_pos_ctrl", "LADRC_SPD_CONTROLLER__motor_control_mechanical_loop_ladrc_spd_ctrl", "LUT_FW_DISTRIBUTOR__motor_control_distributor_lut_fw_distributor", "MC_ACM_SENSORED_CONTROLLER__motor_control_suite_acim_acm_sensored_ctrl", "MC_DECOUPLE_PMSM__motor_control_basic_decouple", "MC_ENCODER__motor_control_interface_encoder", "MC_INTERFACE__motor_control_interface_motor_universal_interface", "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl", "MC_SIL_INTERFACE__motor_control_interface_std_sil_motor_interface", "MC_VOLTAGE_CALCULATOR__motor_control_basic_voltage_calculator", "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl", "MIT_POS_CONTROLLER__motor_control_mechanical_loop_mit_mech_ctrl", "OFFLINE_ESTIMATION__motor_control_param_est_pmsm_offline_est", "ONLINE_RS_ESTIMATOR__motor_control_param_est_pmsm_online_est_rs", "PAIRED_LUT1D__intrinsic_advance_paired_lut1d", "PMSM_DBPTC__motor_control_current_loop_pmsm_dbptc", "PMSM_FLUX_OBSERVER__motor_control_observer_pmsm_fo", "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t", "PMSM_HALL_OBS__motor_control_observer_bldc_hall", "PMSM_HBL48ZL400330K_PARAMETERS__hardware_preset_pmsm_motor_hbl48zl400330k", "PMSM_HFI_BARE_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl_hfi", "PMSM_HFI__motor_control_observer_pmsm_hfi", "PMSM_MTPA_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl_mtpa", "PMSM_SM060R20B30MNAD_PARAMETERS__hardware_preset_pmsm_motor_sm060r20b30mnad", "PMSM_SMO_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl_smo", "PMSM_SMO__motor_control_observer_pmsm_esmo", "PMSM_TYI5008_PARAMETERS__hardware_preset_pmsm_motor_tyi_5008_kv335", "PMSM_TYI5010_PARAMETERS__hardware_preset_pmsm_motor_tyi_5010_360kv", "PMSRM_4P_15KW_PARAMETERS__hardware_preset_pmsm_motor_pmsrm_4p_15kw520v", "PWM_CHANNEL_SINGLE__interface_pwm_channel", "SENSOR_ENUMS__hardware_preset_inverter_3ph_inverter_3ph_general", "SIL_INTERFACE__interface_gmp_sil_std_interface", "SINE_ANALYZER__dsa_sine_analyzer", "SMC_MECH_CONTROLLER__motor_control_mechanical_loop_smc_mech_ctrl", "SPM_FW_DISTRIBUTOR__motor_control_distributor_spm_fw_distributor", "STD_INTERFACE__interface_gmp_standard_interface", "boost_controller_api__digital_power_dcdc_boost", "buck_controller_api__digital_power_dcdc_buck", "continuous_pi_controllers__intrinsic_continuous_continuous_pi", "continuous_pid_aw_controllers__intrinsic_continuous_continuous_pid_aw", "continuous_pid_controllers__intrinsic_continuous_continuous_pid", "continuous_sogi__intrinsic_continuous_sogi", "df_controllers__intrinsic_discrete_direct_form", "discrete_filter_api__intrinsic_discrete_discrete_filter", "discrete_pid_controller__intrinsic_discrete_discrete_pid", "discrete_sogi__intrinsic_discrete_discrete_sogi", "fir_filter__intrinsic_discrete_fir_filter", "frequency_divider__intrinsic_basic_divider", "fuzzy_logic_controller__intrinsic_advance_flc", "fuzzy_pid_controller__intrinsic_advance_fuzzy_pid", "hal_b_g431b_esc1__hardware_preset_inverter_3ph_st_b_g431b_esc1", "hal_boostxl_3phganinv__hardware_preset_inverter_3ph_ti_boostxl_3phganinv", "hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301", "hal_boostxl_drv8304h__hardware_preset_inverter_3ph_ti_boostxl_drv8304h", "hal_boostxl_drv8305__hardware_preset_inverter_3ph_ti_boostxl_drv8305", "hal_boostxl_drv8320rs__hardware_preset_inverter_3ph_ti_boostxl_drv8320rs", "hal_boostxl_drv8323rx__hardware_preset_inverter_3ph_ti_boostxl_drv8323rs", "hal_evlservo1__hardware_preset_inverter_3ph_st_evlservo1", "hal_gmp_inn_lv3phgan__hardware_preset_inverter_3ph_gmp_helios_3phganinv_lv", "hal_harmonia_3ph_lc_filter__hardware_preset_grid_lc_filter_gmp_harmonia_3ph_lc_filter", "hal_steval_ihm023v3__hardware_preset_inverter_3ph_st_steval_ihm023v3", "hal_steval_ihm032v1__hardware_preset_inverter_3ph_st_steval_ihm032v1", "hal_steval_ipm20b__hardware_preset_inverter_3ph_st_steval_ipm20b", "hal_steval_ipmng8q__hardware_preset_inverter_3ph_st_steval_ipmng8q", "hal_x_nucleo_ihm07m1__hardware_preset_inverter_3ph_st_nucleo_imh07m1", "hal_x_nucleo_ihm08m1__hardware_preset_inverter_3ph_st_nucleo_ihm08m1", "hal_x_nucleo_ihm11m1__hardware_preset_inverter_3ph_st_nucleo_ihm11m1", "hal_zonri_drv8301__hardware_preset_inverter_3ph_zr_drv8301", "hysteresis_controller__intrinsic_basic_hysteresis_controller", "lead_lag_compensators__intrinsic_discrete_lead_lag", "lms_adaptive_filter__intrinsic_advance_lms_filter", "lookup_tables__intrinsic_advance_surf_search", "mppt_api__digital_power_mppt_inc_algorithm", "mppt_api__digital_power_mppt_pno_algorithm", "pole_zero_compensators__intrinsic_discrete_pole_zero", "protection_monitor__intrinsic_protection_protection", "protection_strategy_api__digital_power_basic_protectoion_strategy", "repetitive_controller__intrinsic_advance_repetitive_controller", "resonant_controllers__intrinsic_discrete_proportional_resonant", "saturation_blocks__intrinsic_basic_saturation", "signal_generators__intrinsic_discrete_signal_generator", "sil_interface_api__digital_power_basic_std_sil_dp_interface", "sinc_interpolator__intrinsic_advance_sinc_interpolator", "sliding_mode_controller__intrinsic_advance_smc", "slope_limiter__intrinsic_basic_slope_limiter", "sp_modulation_api__interface_hpwm_modulator", "spfc_api__digital_power_sinv_spfc", "spll_api__digital_power_sinv_spll_sogi", "spll_dc_api__digital_power_sinv_spll_sogi_dc", "tracking_continuous_pid__intrinsic_continuous_track_pid", "tracking_pid__intrinsic_discrete_track_discrete_pid", "trip_protector__intrinsic_protection_itoc_protection", "voltage_event_detector__intrinsic_protection_sag_swell"]
+
+RUNNABLE_LOOP_CANONICAL_IDS (loop-only whitelist):
+["ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_INTERFACE_ENCODER_SWITCHER__motor_control_interface_encoder_switcher", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_SOGI_TRAJ__motor_control_motion_sogi_traj", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_S_CURVE_TRAJ__motor_control_motion_s_curve_traj", "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_TRAPEZOIDAL_TRAJ__motor_control_motion_trapezoidal_traj", "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_gfl_pq_ctrl", "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_inv_hcm", "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_inv_neg_ctrl", "CTL_TOPOLOGY_INV_H_API__digital_power_inv_gfl_core", "CTL_TOPOLOGY_INV_H_API__digital_power_inv_gfm_droop", "CTL_TOPOLOGY_SINV_H_API__digital_power_sinv_sinv_core", "CTL_TP_MODULATION_API__interface_npc_modulator", "CTL_TP_MODULATION_API__interface_spwm_modulator", "CURRENT_CONTROLLER__motor_control_current_loop_foc_core", "ConstFGen__motor_control_basic_vf_generator", "DAC_CHANNEL__interface_dac_channel", "DTC_SVM_CONTROLLER__motor_control_current_loop_dtc_svm_core", "IM_IFOC_CONTROLLER__motor_control_current_loop_imfoc_core", "KNOB_POSITION_LOOP__motor_control_motion_knob_pos_loop", "LADRC_SPD_CONTROLLER__motor_control_mechanical_loop_ladrc_spd_ctrl", "MC_ACM_SENSORED_CONTROLLER__motor_control_suite_acim_acm_sensored_ctrl", "MC_ENCODER__motor_control_interface_encoder", "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl", "MC_VOLTAGE_CALCULATOR__motor_control_basic_voltage_calculator", "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl", "PMSM_DBPTC__motor_control_current_loop_pmsm_dbptc", "PMSM_HFI_BARE_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl_hfi", "PMSM_MTPA_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl_mtpa", "PMSM_SMO_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl_smo", "boost_controller_api__digital_power_dcdc_boost", "buck_controller_api__digital_power_dcdc_buck", "frequency_divider__intrinsic_basic_divider", "mppt_api__digital_power_mppt_inc_algorithm", "protection_monitor__intrinsic_protection_protection", "protection_strategy_api__digital_power_basic_protectoion_strategy", "signal_generators__intrinsic_discrete_signal_generator", "spfc_api__digital_power_sinv_spfc", "trip_protector__intrinsic_protection_itoc_protection"]
+
+Controller design KB candidates (JSON):
+[
+  {
+    "canonical_id": "boost_controller_api__digital_power_dcdc_boost",
+    "module_id": "boost_controller_api",
+    "module_name": "Boost Converter Controller API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_boost_ctrl"
+    ],
+    "attach_functions": [
+      "ctl_attach_boost_ctrl_input"
+    ]
+  },
+  {
+    "canonical_id": "buck_controller_api__digital_power_dcdc_buck",
+    "module_id": "buck_controller_api",
+    "module_name": "Buck Converter Controller API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_buck_ctrl"
+    ],
+    "attach_functions": [
+      "ctl_attach_buck_ctrl_input"
+    ]
+  },
+  {
+    "canonical_id": "CTL_BASIC_VIRTUAL_IMP__digital_power_basic_virtual_imp",
+    "module_id": "CTL_BASIC_VIRTUAL_IMP",
+    "module_name": "Virtual Impedance module (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_vir_imp"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_BUCKBOOST_API__digital_power_dcdc_buckboost",
+    "module_id": "CTL_BUCKBOOST_API",
+    "module_name": "4-Switch Buck-Boost API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_PLL_API__digital_power_inv_pll_ddsrf",
+    "module_id": "CTL_PLL_API",
+    "module_name": "Phase-Locked Loop (PLL) API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_ddsrf_pll"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_PLL_API__digital_power_inv_pll_dsogi",
+    "module_id": "CTL_PLL_API",
+    "module_name": "Phase-Locked Loop (PLL) API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_dsogi_pll",
+      "ctl_step_pll_3ph"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_PLL_API__digital_power_inv_pll_srf",
+    "module_id": "CTL_PLL_API",
+    "module_name": "Phase-Locked Loop (PLL) API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_pll_3ph"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_gfl_pq_ctrl",
+    "module_id": "CTL_TOPOLOGY_GFL_INV_H_API",
+    "module_name": "Three-Phase GFL Inverter Topology API (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_gfl_pq"
+    ],
+    "attach_functions": [
+      "ctl_attach_gfl_pq",
+      "ctl_attach_gfl_pq_to_core"
+    ]
+  },
+  {
+    "canonical_id": "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_inv_hcm",
+    "module_id": "CTL_TOPOLOGY_GFL_INV_H_API",
+    "module_name": "Three-Phase GFL Inverter Topology API (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_dq_hcm"
+    ],
+    "attach_functions": [
+      "ctl_attach_dq_hcm"
+    ]
+  },
+  {
+    "canonical_id": "CTL_TOPOLOGY_GFL_INV_H_API__digital_power_inv_inv_neg_ctrl",
+    "module_id": "CTL_TOPOLOGY_GFL_INV_H_API",
+    "module_name": "Three-Phase GFL Inverter Topology API (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_neg_inv_ctrl"
+    ],
+    "attach_functions": [
+      "ctl_attach_neg_inv_to_gfl",
+      "ctl_attach_neg_inv"
+    ]
+  },
+  {
+    "canonical_id": "CTL_TOPOLOGY_INV_H_API__digital_power_inv_gfl_core",
+    "module_id": "CTL_TOPOLOGY_INV_H_API",
+    "module_name": "Three-Phase Inverter Topology API (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_gfl_inv_ctrl"
+    ],
+    "attach_functions": [
+      "ctl_attach_gfl_inv"
+    ]
+  },
+  {
+    "canonical_id": "CTL_TOPOLOGY_INV_H_API__digital_power_inv_gfm_droop",
+    "module_id": "CTL_TOPOLOGY_INV_H_API",
+    "module_name": "Three-Phase GFM Inverter Topology API (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_gfm_droop"
+    ],
+    "attach_functions": [
+      "ctl_attach_gfm_droop_with_gfl_core"
+    ]
+  },
+  {
+    "canonical_id": "CTL_TOPOLOGY_SINV_H_API__digital_power_sinv_sinv_core",
+    "module_id": "CTL_TOPOLOGY_SINV_H_API",
+    "module_name": "Single-Phase Inverter Topology API (Header)",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_sinv"
+    ],
+    "attach_functions": [
+      "ctl_attach_sinv_with_adc"
+    ]
+  },
+  {
+    "canonical_id": "CTL_VIENNA_PFC_API__digital_power_rectifier_vienna",
+    "module_id": "CTL_VIENNA_PFC_API",
+    "module_name": "Vienna Rectifier PFC API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "mppt_api__digital_power_mppt_inc_algorithm",
+    "module_id": "mppt_api",
+    "module_name": "",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_mppt_inc_algo"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "mppt_api__digital_power_mppt_pno_algorithm",
+    "module_id": "mppt_api",
+    "module_name": "MPPT Algorithms API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_mppt_PnO_algo"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy",
+    "module_id": "protection_strategy_api",
+    "module_name": "DC/DC Protection Strategy API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_vip_protection",
+      "ctl_step_foldback_protection"
+    ],
+    "attach_functions": [
+      "ctl_attach_vip_protection",
+      "ctl_attach_foldback_protection"
+    ]
+  },
+  {
+    "canonical_id": "sil_interface_api__digital_power_basic_std_sil_dp_interface",
+    "module_id": "sil_interface_api",
+    "module_name": "Software-in-the-Loop (SIL) Interface API",
+    "domain": "digital_power",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "spfc_api__digital_power_sinv_spfc",
+    "module_id": "spfc_api",
+    "module_name": "Single Phase PFC API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_spfc_ctrl"
+    ],
+    "attach_functions": [
+      "ctl_attach_spfc_input"
+    ]
+  },
+  {
+    "canonical_id": "spll_api__digital_power_sinv_spll_sogi",
+    "module_id": "spll_api",
+    "module_name": "Single Phase PLL API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_single_phase_pll"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "spll_dc_api__digital_power_sinv_spll_sogi_dc",
+    "module_id": "spll_dc_api",
+    "module_name": "Single Phase SOGI-DC PLL API",
+    "domain": "digital_power",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_single_phase_dc_pll"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_DP_LIB__digital_power",
+    "module_id": "CTL_DP_LIB",
+    "module_name": "Digital Power Control Library",
+    "domain": "digital_power.h",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "DATA_LOGGER_4CH__dsa_ti_dlog_dlog_4ch_f",
+    "module_id": "DATA_LOGGER_4CH",
+    "module_name": "4-Channel Data Logger",
+    "domain": "dsa",
+    "schedule_hint": "slow_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "DSA_TRIGGER__dsa_dsa_trigger",
+    "module_id": "DSA_TRIGGER",
+    "module_name": "Data Acquisition Trigger",
+    "domain": "dsa",
+    "schedule_hint": "slow_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "SINE_ANALYZER__dsa_sine_analyzer",
+    "module_id": "SINE_ANALYZER",
+    "module_name": "Sine Wave Analyzer",
+    "domain": "dsa",
+    "schedule_hint": "slow_loop",
+    "step_functions": [
+      "ctl_step_sine_analyzer"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_DSA_LIB__dsa",
+    "module_id": "CTL_DSA_LIB",
+    "module_name": "Dynamic Signal Analysis",
+    "domain": "dsa.h",
+    "schedule_hint": "slow_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ACM_4P24V_PARAMETERS__hardware_preset_acm_motor_acm_4p24v",
+    "module_id": "ACM_4P24V_PARAMETERS",
+    "module_name": "Motor Parameters (ACM 4-Pole 24V)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_CURRENT_SENSOR_TMCS1133__hardware_preset_current_sensor_tmcs1133",
+    "module_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_CURRENT_SENSOR_TMCS1133",
+    "module_name": "TMCS1133",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_3PH__CONTROLLER_PRESET_TEMPLATE__hardware_preset_inverter_3ph_controller_preset_template",
+    "module_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_3PH__CONTROLLER_PRESET_TEMPLATE",
+    "module_name": "_controller_preset_template",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_3PH_GMP_3PH_2136SINV_DUAL_TMPL__hardware_preset_inverter_3ph_gmp_3ph_2136sinv_dual_tmpl",
+    "module_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_3PH_GMP_3PH_2136SINV_DUAL_TMPL",
+    "module_name": "GMP_3PH_2136SINV_DUAL_TMPL",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_HB_GMP_LVHB_V1__hardware_preset_inverter_hb_gmp_lvhb_v1",
+    "module_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_INVERTER_HB_GMP_LVHB_V1",
+    "module_name": "gmp_lvhb_v1",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_PMASRM_MOTOR_PMASRM15KW_CURRENT_DISTRIBUTOR_LUT__hardware_preset_pmasrm_motor_pmasrm15kw_current_distributor_lut",
+    "module_id": "AUTO_CTL_COMPONENT_HARDWARE_PRESET_PMASRM_MOTOR_PMASRM15KW_CURRENT_DISTRIBUTOR_LUT",
+    "module_name": "PMASRM15KW_CURRENT_DISTRIBUTOR_LUT",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_b_g431b_esc1__hardware_preset_inverter_3ph_st_b_g431b_esc1",
+    "module_id": "hal_b_g431b_esc1",
+    "module_name": "B-G431B-ESC1 Discovery Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_boostxl_3phganinv__hardware_preset_inverter_3ph_ti_boostxl_3phganinv",
+    "module_id": "hal_boostxl_3phganinv",
+    "module_name": "BOOSTXL-3PhGaNInv Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301",
+    "module_id": "hal_boostxl_drv8301",
+    "module_name": "BOOSTXL-DRV8301 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_boostxl_drv8304h__hardware_preset_inverter_3ph_ti_boostxl_drv8304h",
+    "module_id": "hal_boostxl_drv8304h",
+    "module_name": "BOOSTXL-DRV8304H Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_boostxl_drv8305__hardware_preset_inverter_3ph_ti_boostxl_drv8305",
+    "module_id": "hal_boostxl_drv8305",
+    "module_name": "BOOSTXL-DRV8305EVM Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_boostxl_drv8320rs__hardware_preset_inverter_3ph_ti_boostxl_drv8320rs",
+    "module_id": "hal_boostxl_drv8320rs",
+    "module_name": "BOOSTXL-DRV8320RS Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_boostxl_drv8323rx__hardware_preset_inverter_3ph_ti_boostxl_drv8323rs",
+    "module_id": "hal_boostxl_drv8323rx",
+    "module_name": "BOOSTXL-DRV8323Rx Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_evlservo1__hardware_preset_inverter_3ph_st_evlservo1",
+    "module_id": "hal_evlservo1",
+    "module_name": "EVLSERVO1 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_gmp_inn_lv3phgan__hardware_preset_inverter_3ph_gmp_helios_3phganinv_lv",
+    "module_id": "hal_gmp_inn_lv3phgan",
+    "module_name": "GMP INN-LV3PHGAN Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_harmonia_3ph_lc_filter__hardware_preset_grid_lc_filter_gmp_harmonia_3ph_lc_filter",
+    "module_id": "hal_harmonia_3ph_lc_filter",
+    "module_name": "Harmonia 3Ph LC Filter HAL",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_steval_ihm023v3__hardware_preset_inverter_3ph_st_steval_ihm023v3",
+    "module_id": "hal_steval_ihm023v3",
+    "module_name": "STEVAL-IHM023V3 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_steval_ihm032v1__hardware_preset_inverter_3ph_st_steval_ihm032v1",
+    "module_id": "hal_steval_ihm032v1",
+    "module_name": "STEVAL-IHM032V1 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_steval_ipm20b__hardware_preset_inverter_3ph_st_steval_ipm20b",
+    "module_id": "hal_steval_ipm20b",
+    "module_name": "STEVAL-IPM20B Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_steval_ipmng8q__hardware_preset_inverter_3ph_st_steval_ipmng8q",
+    "module_id": "hal_steval_ipmng8q",
+    "module_name": "STEVAL-IPMNG8Q Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_x_nucleo_ihm07m1__hardware_preset_inverter_3ph_st_nucleo_imh07m1",
+    "module_id": "hal_x_nucleo_ihm07m1",
+    "module_name": "X-NUCLEO-IHM07M1 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_x_nucleo_ihm08m1__hardware_preset_inverter_3ph_st_nucleo_ihm08m1",
+    "module_id": "hal_x_nucleo_ihm08m1",
+    "module_name": "X-NUCLEO-IHM08M1 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_x_nucleo_ihm11m1__hardware_preset_inverter_3ph_st_nucleo_ihm11m1",
+    "module_id": "hal_x_nucleo_ihm11m1",
+    "module_name": "X-NUCLEO-IHM11M1 Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hal_zonri_drv8301__hardware_preset_inverter_3ph_zr_drv8301",
+    "module_id": "hal_zonri_drv8301",
+    "module_name": "ZonRi DRV8301 Module Hardware Abstraction Layer",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "HW_BOARD_PARAMETERS_2136SINV__hardware_preset_inverter_3ph_gmp_3ph_2136sinv_dual",
+    "module_id": "HW_BOARD_PARAMETERS_2136SINV",
+    "module_name": "2136SINV Inverter Hardware Parameters",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t",
+    "module_id": "PMSM_GBM2804H_PARAMETERS",
+    "module_name": "Motor Parameters (GBM2804H-100T)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PMSM_HBL48ZL400330K_PARAMETERS__hardware_preset_pmsm_motor_hbl48zl400330k",
+    "module_id": "PMSM_HBL48ZL400330K_PARAMETERS",
+    "module_name": "Motor Parameters (HBL48ZL400330K)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PMSM_SM060R20B30MNAD_PARAMETERS__hardware_preset_pmsm_motor_sm060r20b30mnad",
+    "module_id": "PMSM_SM060R20B30MNAD_PARAMETERS",
+    "module_name": "Motor Parameters (SM060R20B30MNAD)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PMSM_TYI5008_PARAMETERS__hardware_preset_pmsm_motor_tyi_5008_kv335",
+    "module_id": "PMSM_TYI5008_PARAMETERS",
+    "module_name": "Motor Parameters (TYI-5008 KV335)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PMSM_TYI5010_PARAMETERS__hardware_preset_pmsm_motor_tyi_5010_360kv",
+    "module_id": "PMSM_TYI5010_PARAMETERS",
+    "module_name": "Motor Parameters (TYI-5010 KV360)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PMSRM_4P_15KW_PARAMETERS__hardware_preset_pmsm_motor_pmsrm_4p_15kw520v",
+    "module_id": "PMSRM_4P_15KW_PARAMETERS",
+    "module_name": "Motor Parameters (PMSRM 4-Pole 15kW)",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "SENSOR_ENUMS__hardware_preset_inverter_3ph_inverter_3ph_general",
+    "module_id": "SENSOR_ENUMS",
+    "module_name": "Sensor Configuration Enumerations",
+    "domain": "hardware_preset",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ADC_BIAS_MODELS__interface_bias_model",
+    "module_id": "ADC_BIAS_MODELS",
+    "module_name": "ADC Bias Calculation Models",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ADC_GAIN_MODELS__interface_gain_model",
+    "module_id": "ADC_GAIN_MODELS",
+    "module_name": "ADC Gain Calculation Models",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_ptr_adc_channel",
+      "ctl_step_dual_ptr_adc_channel",
+      "ctl_step_tri_ptr_adc_channel"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ADC_SINGLE_CHANNEL__interface_adc_channel",
+    "module_id": "ADC_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_adc_channel",
+      "ctl_step_dual_adc_channel",
+      "ctl_step_adc_tri_channel",
+      "ctl_step_adc_calibrator"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_TP_MODULATION_API__interface_npc_modulator",
+    "module_id": "CTL_TP_MODULATION_API",
+    "module_name": "Three-Phase Modulation API",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_npc_modulator",
+      "ctl_step_npc_svpwm_modulator"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator",
+    "module_id": "CTL_TP_MODULATION_API",
+    "module_name": "Three-Phase Modulation API",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_spwm_modulator",
+      "ctl_step_svpwm_modulator"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "DAC_CHANNEL__interface_dac_channel",
+    "module_id": "DAC_CHANNEL",
+    "module_name": "Digital-to-Analog Converter (DAC) Channel",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_dac_channel"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "GMP_CTL_INTERFACES__interface_interface_base",
+    "module_id": "GMP_CTL_INTERFACES",
+    "module_name": "GMP CTL interface",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PWM_CHANNEL_SINGLE__interface_pwm_channel",
+    "module_id": "PWM_CHANNEL_SINGLE",
+    "module_name": "Single PWM Channel",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_pwm_channel",
+      "ctl_step_pwm_channel_warp",
+      "ctl_step_pwm_channel_inv",
+      "ctl_step_pwm_dual_channel",
+      "ctl_step_pwm_dual_channel_warp",
+      "ctl_step_pwm_dual_channel_inv",
+      "ctl_step_pwm_tri_channel",
+      "ctl_step_pwm_tri_channel_warp",
+      "ctl_step_pwm_tri_channel_inv"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "SIL_INTERFACE__interface_gmp_sil_std_interface",
+    "module_id": "SIL_INTERFACE",
+    "module_name": "Software-in-the-Loop (SIL) Interface",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "sp_modulation_api__interface_hpwm_modulator",
+    "module_id": "sp_modulation_api",
+    "module_name": "Single-Phase Modulation API",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_single_phase_H_modulation"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
+    "module_id": "STD_INTERFACE",
+    "module_name": "Standard Controller Interface",
+    "domain": "interface",
+    "schedule_hint": "init",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ADAPTIVE_CONTROLLER__intrinsic_advance_mrac",
+    "module_id": "ADAPTIVE_CONTROLLER",
+    "module_name": "Model Reference Adaptive Controller (MRAC)",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_mrac"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "BACKSTEPPING_CONTROLLER__intrinsic_advance_back_stepping",
+    "module_id": "BACKSTEPPING_CONTROLLER",
+    "module_name": "Backstepping Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_backstepping"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "BIQUAD_filter_api__intrinsic_discrete_biquad_filter",
+    "module_id": "BIQUAD_filter_api",
+    "module_name": "Discrete Filter Library",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_biquad_filter"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "continuous_pi_controllers__intrinsic_continuous_continuous_pi",
+    "module_id": "continuous_pi_controllers",
+    "module_name": "Continuous-Form PI/IP Controllers",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_pi_par",
+      "ctl_step_pi_ser",
+      "ctl_step_ip_par",
+      "ctl_step_ip_ser"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "continuous_pid_aw_controllers__intrinsic_continuous_continuous_pid_aw",
+    "module_id": "continuous_pid_aw_controllers",
+    "module_name": "Anti-Windup PID Controllers",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_pid_aw_par",
+      "ctl_step_pid_aw_ser"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "continuous_pid_controllers__intrinsic_continuous_continuous_pid",
+    "module_id": "continuous_pid_controllers",
+    "module_name": "Continuous-Form PID Controllers",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_pid_par",
+      "ctl_step_pid_ser",
+      "ctl_step_ipd_par",
+      "ctl_step_ipd_ser"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "continuous_sogi__intrinsic_continuous_sogi",
+    "module_id": "continuous_sogi",
+    "module_name": "Continuous-Form SOGI",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_sogi"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "df_controllers__intrinsic_discrete_direct_form",
+    "module_id": "df_controllers",
+    "module_name": "Direct Form Controllers",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_df11",
+      "ctl_step_df22",
+      "ctl_step_df13",
+      "ctl_step_df23"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "discrete_filter_api__intrinsic_discrete_discrete_filter",
+    "module_id": "discrete_filter_api",
+    "module_name": "Discrete Filter Library",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_lowpass_filter",
+      "ctl_step_filter_iir1"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "discrete_pid_controller__intrinsic_discrete_discrete_pid",
+    "module_id": "discrete_pid_controller",
+    "module_name": "Discrete PID Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_discrete_pid"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "discrete_sogi__intrinsic_discrete_discrete_sogi",
+    "module_id": "discrete_sogi",
+    "module_name": "SOGI-based Quadrature Signal Generator",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_discrete_sogi",
+      "ctl_step_discrete_sogi_dc"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "fir_filter__intrinsic_discrete_fir_filter",
+    "module_id": "fir_filter",
+    "module_name": "FIR Filter",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_fir_filter"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "frequency_divider__intrinsic_basic_divider",
+    "module_id": "frequency_divider",
+    "module_name": "Frequency Divider",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_divider"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "fuzzy_logic_controller__intrinsic_advance_flc",
+    "module_id": "fuzzy_logic_controller",
+    "module_name": "Fuzzy Logic Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_flc"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "fuzzy_pid_controller__intrinsic_advance_fuzzy_pid",
+    "module_id": "fuzzy_pid_controller",
+    "module_name": "Fuzzy PID Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_fuzzy_pid",
+      "ctl_step_pid_par"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "hysteresis_controller__intrinsic_basic_hysteresis_controller",
+    "module_id": "hysteresis_controller",
+    "module_name": "Hysteresis Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_hysteresis_controller"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ILC_CONTROLLER__intrinsic_advance_ilc",
+    "module_id": "ILC_CONTROLLER",
+    "module_name": "Iterative Learning Controller (ILC)",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_ilc"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "IMC_CONTROLLER__intrinsic_advance_imc",
+    "module_id": "IMC_CONTROLLER",
+    "module_name": "Internal Model Controller (IMC)",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_imc"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "LADRC1__intrinsic_continuous_ladrc1",
+    "module_id": "LADRC1",
+    "module_name": "1st-Order LADRC",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_ladrc1"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "LADRC2__intrinsic_continuous_ladrc2",
+    "module_id": "LADRC2",
+    "module_name": "2nd-Order LADRC",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_ladrc2"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "lead_lag_compensators__intrinsic_discrete_lead_lag",
+    "module_id": "lead_lag_compensators",
+    "module_name": "Lead-Lag Compensators",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_lead",
+      "ctl_step_lag"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "lms_adaptive_filter__intrinsic_advance_lms_filter",
+    "module_id": "lms_adaptive_filter",
+    "module_name": "LMS Adaptive Filter",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_lms_filter"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "lookup_tables__intrinsic_advance_surf_search",
+    "module_id": "lookup_tables",
+    "module_name": "Look-Up Tables (LUT)",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_interpolate_lut1d",
+      "ctl_step_interpolate_lut2d",
+      "ctl_step_interpolate_uniform_lut2d"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "PAIRED_LUT1D__intrinsic_advance_paired_lut1d",
+    "module_id": "PAIRED_LUT1D",
+    "module_name": "Paired 1D Look-Up Table",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_interpolate_paired_lut1d"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "pole_zero_compensators__intrinsic_discrete_pole_zero",
+    "module_id": "pole_zero_compensators",
+    "module_name": "Pole-Zero Compensators",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_1p1z",
+      "ctl_step_2p2z",
+      "ctl_step_3p3z"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "protection_monitor__intrinsic_protection_protection",
+    "module_id": "protection_monitor",
+    "module_name": "Protection Monitor",
+    "domain": "intrinsic",
+    "schedule_hint": "fault",
+    "step_functions": [
+      "ctl_step_protection_monitor"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "repetitive_controller__intrinsic_advance_repetitive_controller",
+    "module_id": "repetitive_controller",
+    "module_name": "Repetitive Controller (RC)",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_repetitive_controller"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "resonant_controllers__intrinsic_discrete_proportional_resonant",
+    "module_id": "resonant_controllers",
+    "module_name": "Resonant Controllers",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_resonant_controller",
+      "ctl_step_pr_controller",
+      "ctl_step_qr_controller",
+      "ctl_step_qpr_controller"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "saturation_blocks__intrinsic_basic_saturation",
+    "module_id": "saturation_blocks",
+    "module_name": "Saturation (Limiter) Blocks",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_saturation",
+      "ctl_step_bipolar_saturation",
+      "ctl_step_atanh_saturation"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "signal_generators__intrinsic_discrete_signal_generator",
+    "module_id": "signal_generators",
+    "module_name": "Signal Generators",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_sine_generator",
+      "ctl_step_ramp_generator",
+      "ctl_step_square_wave_generator",
+      "ctl_step_triangle_wave_generator"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "sinc_interpolator__intrinsic_advance_sinc_interpolator",
+    "module_id": "sinc_interpolator",
+    "module_name": "Sinc Interpolator",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_sinc_interpolator"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "sliding_mode_controller__intrinsic_advance_smc",
+    "module_id": "sliding_mode_controller",
+    "module_name": "Sliding Mode Controller (SMC)",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_smc"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "slope_limiter__intrinsic_basic_slope_limiter",
+    "module_id": "slope_limiter",
+    "module_name": "Slope Limiter",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_slope_limiter"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "tracking_continuous_pid__intrinsic_continuous_track_pid",
+    "module_id": "tracking_continuous_pid",
+    "module_name": "Tracking Continuous PID Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_tracking_continuous_pid",
+      "ctl_step_pid_aw_ser"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "tracking_pid__intrinsic_discrete_track_discrete_pid",
+    "module_id": "tracking_pid",
+    "module_name": "Tracking PID Controller",
+    "domain": "intrinsic",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_tracking_pid",
+      "ctl_step_discrete_pid"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "trip_protector__intrinsic_protection_itoc_protection",
+    "module_id": "trip_protector",
+    "module_name": "Three-Stage Trip Protector",
+    "domain": "intrinsic",
+    "schedule_hint": "fault",
+    "step_functions": [
+      "ctl_step_trip_protector"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "voltage_event_detector__intrinsic_protection_sag_swell",
+    "module_id": "voltage_event_detector",
+    "module_name": "Voltage Sag/Swell Detector",
+    "domain": "intrinsic",
+    "schedule_hint": "fault",
+    "step_functions": [
+      "ctl_step_voltage_event_detector"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CTL_INTRINSIC_LIB__intrinsic",
+    "module_id": "CTL_INTRINSIC_LIB",
+    "module_name": "Control Template Library Intrinsic",
+    "domain": "intrinsic.h",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION",
+    "module_name": "mtr_protection",
+    "domain": "motor_control",
+    "schedule_hint": "fault",
+    "step_functions": [
+      "ctl_step_mtr_protect_fast"
+    ],
+    "attach_functions": [
+      "ctl_attach_mtr_protect_port"
+    ]
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_CONSULTANT_UNIT_CONSULTANT__motor_control_consultant_unit_consultant",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_CONSULTANT_UNIT_CONSULTANT",
+    "module_name": "unit_consultant",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_INTERFACE_ENCODER_SWITCHER__motor_control_interface_encoder_switcher",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_INTERFACE_ENCODER_SWITCHER",
+    "module_name": "encoder_switcher",
+    "domain": "motor_control",
+    "schedule_hint": "init",
+    "step_functions": [
+      "ctl_step_angle_switcher"
+    ],
+    "attach_functions": [
+      "ctl_attach_angle_switcher"
+    ]
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_S_CURVE_TRAJ__motor_control_motion_s_curve_traj",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_S_CURVE_TRAJ",
+    "module_name": "s_curve_traj",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_scurve_planner_tdm"
+    ],
+    "attach_functions": [
+      "ctl_attach_scurve_planner"
+    ]
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_SOGI_TRAJ__motor_control_motion_sogi_traj",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_SOGI_TRAJ",
+    "module_name": "sogi_traj",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_sogi_planner_tdm"
+    ],
+    "attach_functions": [
+      "ctl_attach_sogi_planner"
+    ]
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_TRAPEZOIDAL_TRAJ__motor_control_motion_trapezoidal_traj",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_MOTION_TRAPEZOIDAL_TRAJ",
+    "module_name": "trapezoidal_traj",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_trap_planner_tdm"
+    ],
+    "attach_functions": [
+      "ctl_attach_trap_planner"
+    ]
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_OBSERVER_ATO_PLL__motor_control_observer_ato_pll",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_OBSERVER_ATO_PLL",
+    "module_name": "ato_pll",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_ato_pll"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_PMSM_OFFLINE_ID_PMSM_OFFLINE_ID_SM__motor_control_pmsm_offline_id_pmsm_offline_id_sm",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_PMSM_OFFLINE_ID_PMSM_OFFLINE_ID_SM",
+    "module_name": "pmsm_offline_id_sm",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "BLDC_ZCD_OBS__motor_control_observer_bldc_zcd_obs",
+    "module_id": "BLDC_ZCD_OBS",
+    "module_name": "BLDC Zero-Crossing Observer",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_bldc_zcd_obs"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CONST_CURRENT_DISTRIBUTOR__motor_control_distributor_ipm_fw_distributor",
+    "module_id": "CONST_CURRENT_DISTRIBUTOR",
+    "module_name": "Constant Angle Current Distributor",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_const_distributor"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "ConstFGen__motor_control_basic_vf_generator",
+    "module_id": "ConstFGen",
+    "module_name": "Constant Frequency Generator",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [
+      "ctl_step_const_f_controller",
+      "ctl_step_slope_f",
+      "ctl_step_slope_f_pu",
+      "ctl_step_const_vf"
+    ],
+    "attach_functions": []
+  },
+  {
+    "canonical_id": "CONSULTANT_IM__motor_control_consultant_acim_consultant",
+    "module_id": "CONSULTANT_IM",
+    "module_name": "IM Model Consultant",
+    "domain": "motor_control",
+    "schedule_hint": "fast_loop",
+    "step_functions": [],
+    "attach_functions": []
+  }
+]
+
+Output JSON template:
+{"project":{"name":"...","target":"GMP_CTL","notes":"..."},"modules":[],"links":[],"schedule":{"init":[],"fast_loop":[],"slow_loop":[],"fault":[]}}
