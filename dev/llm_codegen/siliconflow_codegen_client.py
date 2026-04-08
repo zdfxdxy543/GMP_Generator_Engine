@@ -308,11 +308,152 @@ def render_c_output(sections: dict) -> str:
     )
 
 
-def render_ctl_main_output(sections: dict) -> str:
+def _sanitize_ident(text: str) -> str:
+    s = re.sub(r"[^A-Za-z0-9_]", "_", text or "")
+    if not s:
+        return "unnamed"
+    if not re.match(r"^[A-Za-z_]", s):
+        s = "p_" + s
+    return s
+
+
+def _extract_type_from_signature(signature: str) -> str | None:
+    m = re.search(r"\(([^)]*)\)", signature or "")
+    if not m:
+        return None
+    args = [x.strip() for x in m.group(1).split(",")]
+    if not args or args[0] in ("", "void"):
+        return None
+
+    first = args[0]
+    # Example accepted forms: "foo_t* x", "const foo_t *x"
+    m2 = re.match(r"^(?:const\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\*\s*[A-Za-z_][A-Za-z0-9_]*$", first)
+    if not m2:
+        return None
+    return m2.group(1)
+
+
+def _infer_instance_type(mod: dict) -> str | None:
+    api = mod.get("api_contract") or {}
+    for entry in (api.get("step") or []):
+        t = _extract_type_from_signature(entry.get("signature") or "")
+        if t:
+            return t
+    for entry in (api.get("attach") or []):
+        t = _extract_type_from_signature(entry.get("signature") or "")
+        if t:
+            return t
+    return None
+
+
+def _build_instance_declarations(resolved_modules: list) -> str:
+    lines = [
+        "// auto-generated instance declarations",
+    ]
+    for mod in resolved_modules:
+        inst = mod.get("instance_name")
+        if not inst:
+            continue
+        type_name = _infer_instance_type(mod)
+        if type_name:
+            lines.append(f"static {type_name} {inst};")
+        else:
+            lines.append(f"// unresolved type for instance: {inst} ({mod.get('canonical_id')})")
+    return "\n".join(lines)
+
+
+def _to_c_scalar(value):
+    if isinstance(value, bool):
+        return "bool", "true" if value else "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "int32_t", str(value)
+    if isinstance(value, float):
+        text = f"{value:.9g}"
+        if "." not in text and "e" not in text and "E" not in text:
+            text += ".0"
+        return "float", text + "f"
+    return None, None
+
+
+def _build_tunable_storage(resolved_modules: list) -> str:
+    fields = []
+    for mod in resolved_modules:
+        inst = mod.get("instance_name") or "module"
+        params = mod.get("params") or {}
+        if not isinstance(params, dict):
+            continue
+        for k, v in params.items():
+            c_type, c_val = _to_c_scalar(v)
+            if not c_type:
+                continue
+            field = _sanitize_ident(f"{inst}__{k}")
+            fields.append((field, c_type, c_val, inst, k))
+
+    if not fields:
+        return (
+            "// no scalar tunable parameters were found in control.modules[*].params\n"
+            "typedef struct\n"
+            "{\n"
+            "    uint8_t reserved;\n"
+            "} ctl_tunable_params_t;\n\n"
+            "ctl_tunable_params_t g_ctl_tunable_params = { 0 };\n\n"
+            "void ctl_update_tunable_params(const ctl_tunable_params_t* src)\n"
+            "{\n"
+            "    if (!src) {\n"
+            "        return;\n"
+            "    }\n"
+            "    g_ctl_tunable_params = *src;\n"
+            "}\n\n"
+            "void ctl_apply_tunable_params(void)\n"
+            "{\n"
+            "    // Bind g_ctl_tunable_params to instance fields in your project-specific code.\n"
+            "    (void)g_ctl_tunable_params;\n"
+            "}\n"
+        )
+
+    struct_lines = ["typedef struct", "{"]
+    init_lines = ["ctl_tunable_params_t g_ctl_tunable_params =", "{"]
+    for field, c_type, c_val, _, _ in fields:
+        struct_lines.append(f"    {c_type} {field};")
+        init_lines.append(f"    .{field} = {c_val},")
+    struct_lines.append("} ctl_tunable_params_t;")
+    init_lines.append("};")
+
+    apply_hint = [
+        "void ctl_apply_tunable_params(void)",
+        "{",
+        "    // Project-specific binding hook for external tuning parameters.",
+    ]
+    for field, _, _, inst, key in fields:
+        apply_hint.append(f"    // Example: {inst}.{key} = g_ctl_tunable_params.{field};")
+    apply_hint.append("    (void)g_ctl_tunable_params;")
+    apply_hint.append("}")
+
+    return (
+        "// externally tunable parameter storage\n"
+        + "\n".join(struct_lines)
+        + "\n\n"
+        + "\n".join(init_lines)
+        + "\n\n"
+        + "void ctl_update_tunable_params(const ctl_tunable_params_t* src)\n"
+        + "{\n"
+        + "    if (!src) {\n"
+        + "        return;\n"
+        + "    }\n"
+        + "    g_ctl_tunable_params = *src;\n"
+        + "}\n\n"
+        + "\n".join(apply_hint)
+        + "\n"
+    )
+
+
+def render_ctl_main_output(sections: dict, resolved_modules: list) -> str:
     init_body = indent_block(sections.get("init", ""))
     fast_body = indent_block(sections.get("fast_loop", ""))
     slow_body = indent_block(sections.get("slow_loop", ""))
     fault_body = indent_block(sections.get("fault", ""))
+    declarations = _build_instance_declarations(resolved_modules)
+    tunable_storage = _build_tunable_storage(resolved_modules)
 
     dispatch_extra = ""
     if slow_body:
@@ -322,8 +463,15 @@ def render_ctl_main_output(sections: dict) -> str:
 
     return (
         "// generated ctl_main-style code body\n\n"
+        + "#include <stdbool.h>\n"
+        + "#include <stdint.h>\n\n"
+        + declarations
+        + "\n\n"
+        + tunable_storage
+        + "\n"
         "void ctl_init(void)\n"
         "{\n"
+        "    ctl_apply_tunable_params();\n"
         f"{init_body}\n"
         "}\n\n"
         "GMP_STATIC_INLINE void ctl_dispatch(void)\n"
@@ -400,6 +548,11 @@ def _pick_autocall(step_items: list, instance_name: str) -> str | None:
     return None
 
 
+def _has_instance_call(text: str, fn_name: str, instance_name: str) -> bool:
+    pattern = rf"\b{re.escape(fn_name)}\s*\(\s*&?\s*{re.escape(instance_name)}\b"
+    return re.search(pattern, text) is not None
+
+
 def ensure_required_calls(sections: dict, control: dict, resolved_modules: list) -> dict:
     repaired = dict(sections)
     by_instance = {m["instance_name"]: m for m in resolved_modules}
@@ -416,8 +569,18 @@ def ensure_required_calls(sections: dict, control: dict, resolved_modules: list)
 
             step_items = (mod.get("api_contract") or {}).get("step") or []
             expected_names = [x.get("function") for x in step_items if x.get("function")]
-            if any(name in phase_text for name in expected_names):
+            current_text = "\n".join(lines)
+            if any(_has_instance_call(current_text, name, inst) for name in expected_names):
                 continue
+
+            # Function name may exist with malformed/non-matching arguments. Remove and repair.
+            if any(re.search(rf"\b{re.escape(name)}\s*\(", current_text) for name in expected_names):
+                filtered = []
+                for line in lines:
+                    if any(re.search(rf"\b{re.escape(name)}\s*\(", line) for name in expected_names):
+                        continue
+                    filtered.append(line)
+                lines = filtered
 
             if step_items:
                 stmt = _pick_autocall(step_items, inst)
@@ -521,7 +684,7 @@ def main():
     sections = sanitize_sections(sections, control, resolved_modules)
 
     if args.render_profile == "ctl_main":
-        rendered = render_ctl_main_output(sections)
+        rendered = render_ctl_main_output(sections, resolved_modules)
     else:
         rendered = render_c_output(sections)
     quality_gate(rendered, sections, control, resolved_modules)
