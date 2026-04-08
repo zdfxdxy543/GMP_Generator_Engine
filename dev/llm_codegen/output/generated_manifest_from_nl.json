@@ -1,0 +1,10 @@
+{
+  "mode": "project4",
+  "files": [
+    "dev/llm_codegen/output\\ctl_main.h",
+    "dev/llm_codegen/output\\ctl_main.c",
+    "dev/llm_codegen/output\\user_main.h",
+    "dev/llm_codegen/output\\user_main.c"
+  ],
+  "generated_at": "2026-04-08T17:24:01.131520"
+}

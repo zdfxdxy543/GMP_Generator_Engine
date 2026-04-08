@@ -5,7 +5,8 @@ param(
   [string]$ControlOut = "dev/llm_codegen/output/control_from_nl.json",
   [string]$ControlRaw = "dev/llm_codegen/output/control_raw_from_nl.json",
   [string]$ControlPromptOut = "dev/llm_codegen/output/control_prompt_from_nl.txt",
-  [string]$Out = "dev/llm_codegen/output/generated_ctl_main_from_nl.c",
+  [string]$Out = "dev/llm_codegen/output/generated_manifest_from_nl.json",
+  [string]$OutDir = "dev/llm_codegen/output",
   [string]$Raw = "dev/llm_codegen/output/generated_raw_from_nl.json",
   [string]$PromptOut = "dev/llm_codegen/output/generated_prompt_from_nl.txt",
   [int]$MaxPipelineAttempts = 5,
@@ -54,9 +55,10 @@ for ($attempt = 1; $attempt -le $MaxPipelineAttempts; $attempt++) {
     --kb $Kb `
     --llm-config $LlmConfig `
     --out $Out `
+    --out-dir $OutDir `
     --raw $Raw `
     --prompt-out $PromptOut `
-    --render-profile ctl_main `
+    --render-profile project4 `
     --model $modelToUse
 
   if ($LASTEXITCODE -eq 0) {

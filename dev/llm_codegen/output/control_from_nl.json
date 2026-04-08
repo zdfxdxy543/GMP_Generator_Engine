@@ -1,18 +1,14 @@
 {
   "project": {
-    "name": "PMSM_Speed_Control",
+    "name": "Buck Voltage Closed-Loop Controller",
     "target": "GMP_CTL",
-    "notes": "永磁同步电机速度控制程序",
-    "generated_at": "2026-04-08T13:28:13.073687"
+    "notes": "Buck converter voltage regulation with closed-loop control",
+    "generated_at": "2026-04-08T17:21:03.228211"
   },
   "modules": [
     {
-      "instance_name": "motor_params",
-      "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t"
-    },
-    {
-      "instance_name": "inverter_hal",
-      "canonical_id": "hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301"
+      "instance_name": "buck_ctrl",
+      "canonical_id": "buck_controller_api__digital_power_dcdc_buck"
     },
     {
       "instance_name": "adc_channel",
@@ -23,32 +19,20 @@
       "canonical_id": "PWM_CHANNEL_SINGLE__interface_pwm_channel"
     },
     {
-      "instance_name": "encoder",
-      "canonical_id": "MC_ENCODER__motor_control_interface_encoder"
-    },
-    {
-      "instance_name": "speed_controller",
-      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl"
-    },
-    {
-      "instance_name": "current_controller",
-      "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core"
-    },
-    {
-      "instance_name": "modulator",
-      "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator"
-    },
-    {
-      "instance_name": "motor_protection",
-      "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection"
+      "instance_name": "protection",
+      "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy"
     },
     {
       "instance_name": "trip_protector",
       "canonical_id": "trip_protector__intrinsic_protection_itoc_protection"
     },
     {
-      "instance_name": "mc_lib",
-      "canonical_id": "CTL_MC_LIB__motor_control"
+      "instance_name": "std_interface",
+      "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface"
+    },
+    {
+      "instance_name": "dp_lib",
+      "canonical_id": "CTL_DP_LIB__digital_power"
     },
     {
       "instance_name": "intrinsic_lib",
@@ -58,58 +42,49 @@
   "links": [
     {
       "from": "adc_channel",
-      "to": "current_controller",
-      "signal": "phase_currents"
+      "to": "buck_ctrl",
+      "signal": "voltage_feedback"
     },
     {
-      "from": "encoder",
-      "to": "speed_controller",
-      "signal": "speed_feedback"
-    },
-    {
-      "from": "speed_controller",
-      "to": "current_controller",
-      "signal": "current_reference"
-    },
-    {
-      "from": "current_controller",
-      "to": "modulator",
-      "signal": "modulation_signals"
-    },
-    {
-      "from": "modulator",
+      "from": "buck_ctrl",
       "to": "pwm_channel",
-      "signal": "pwm_duty_cycles"
+      "signal": "pwm_duty"
     },
     {
       "from": "adc_channel",
-      "to": "motor_protection",
-      "signal": "current_monitoring"
+      "to": "protection",
+      "signal": "voltage_monitor"
     },
     {
-      "from": "motor_protection",
+      "from": "protection",
       "to": "trip_protector",
       "signal": "fault_status"
     },
     {
       "from": "trip_protector",
-      "to": "pwm_channel",
-      "signal": "pwm_disable"
+      "to": "buck_ctrl",
+      "signal": "protection_override"
+    },
+    {
+      "from": "std_interface",
+      "to": "buck_ctrl",
+      "signal": "voltage_reference"
+    },
+    {
+      "from": "std_interface",
+      "to": "buck_ctrl",
+      "signal": "control_parameters"
     }
   ],
   "schedule": {
     "init": [
-      "motor_params",
-      "inverter_hal",
-      "pwm_channel",
-      "modulator",
-      "encoder"
+      "std_interface",
+      "adc_channel",
+      "pwm_channel"
     ],
     "fast_loop": [
-      "adc_channel",
-      "speed_controller",
-      "current_controller",
-      "motor_protection"
+      "buck_ctrl",
+      "protection"
     ],
     "slow_loop": [],
     "fault": [

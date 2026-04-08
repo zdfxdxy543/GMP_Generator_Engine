@@ -1,30 +1,122 @@
 {
-  "id": "019d6b90105687d5b6370db7b9f787e4",
-  "object": "chat.completion",
-  "created": 1775626096,
-  "model": "deepseek-ai/DeepSeek-V3.2",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "```json\n{\n    \"init\": \"motor_params_init();\\ninverter_hal_init();\\npwm_channel_init();\\nmodulator_init();\\nencoder_init();\",\n    \"fast_loop\": \"ctl_step_ptr_adc_channel(&adc_channel);\\nctl_step_mech_ctrl(&speed_controller);\\nctl_step_current_controller(&current_controller);\\nctl_step_mtr_protect_fast(&motor_protection);\",\n    \"slow_loop\": \"\",\n    \"fault\": \"ctl_step_trip_protector(&trip_protector);\"\n}\n```"
+  "ctl_main.h": {
+    "id": "019d6c65381724042c0253e685ae3a86",
+    "object": "chat.completion",
+    "created": 1775640066,
+    "model": "deepseek-ai/DeepSeek-V3.2",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "```c\n#ifndef CTL_MAIN_H\n#define CTL_MAIN_H\n\n#include \"ctl/component/digital_power/dcdc/buck.h\"\n#include \"ctl/component/interface/adc_ptr_channel.h\"\n#include \"ctl/component/interface/pwm_channel.h\"\n#include \"ctl/component/digital_power/basic/protectoion_strategy.h\"\n#include \"ctl/component/intrinsic/protection/itoc_protection.h\"\n#include \"ctl/component/interface/gmp_standard_interface.h\"\n#include \"ctl/component/digital_power.h\"\n#include \"ctl/component/intrinsic.h\"\n\nextern buck_ctrl_t buck_ctrl;\nextern ptr_adc_channel_t adc_channel;\nextern pwm_channel_t pwm_channel;\nextern std_vip_protection_t protection;\nextern ctl_trip_protector_t trip_protector;\nextern std_interface_t std_interface;\n\nvoid ctl_init(void);\nvoid ctl_mainloop(void);\nvoid clear_all_controllers(void);\nvoid tsk_protect(void);\nvoid ctl_enable_pwm(void);\nvoid ctl_disable_pwm(void);\n\nstatic inline void ctl_dispatch_fast_loop(void)\n{\n    ctl_step_buck_ctrl(&buck_ctrl);\n    ctl_step_vip_protection(&protection);\n}\n\nstatic inline void ctl_dispatch_fault(void)\n{\n    ctl_step_trip_protector(&trip_protector);\n}\n\n#endif /* CTL_MAIN_H */\n```"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4092,
+      "completion_tokens": 325,
+      "total_tokens": 4417,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
       },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 5292,
-    "completion_tokens": 133,
-    "total_tokens": 5425,
-    "completion_tokens_details": {
-      "reasoning_tokens": 0
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 4092
     },
-    "prompt_tokens_details": {
-      "cached_tokens": 0
-    },
-    "prompt_cache_hit_tokens": 0,
-    "prompt_cache_miss_tokens": 5292
+    "system_fingerprint": ""
   },
-  "system_fingerprint": ""
+  "ctl_main.c": {
+    "id": "019d6c6570619b6cf3e92be72a2a808d",
+    "object": "chat.completion",
+    "created": 1775640080,
+    "model": "deepseek-ai/DeepSeek-V3.2",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "```json\n{\n  \"ctl_main.c\": \"#include \\\"ctl/component/digital_power/dcdc/buck.h\\\"\\n#include \\\"ctl/component/interface/adc_ptr_channel.h\\\"\\n#include \\\"ctl/component/interface/pwm_channel.h\\\"\\n#include \\\"ctl/component/digital_power/basic/protectoion_strategy.h\\\"\\n#include \\\"ctl/component/intrinsic/protection/itoc_protection.h\\\"\\n#include \\\"ctl/component/interface/gmp_standard_interface.h\\\"\\n#include \\\"ctl/component/digital_power.h\\\"\\n#include \\\"ctl/component/intrinsic.h\\\"\\n#include \\\"ctl_main.h\\\"\\n\\nbuck_ctrl_t buck_ctrl;\\nptr_adc_channel_t adc_channel;\\npwm_channel_t pwm_channel;\\nstd_vip_protection_t protection;\\nctl_trip_protector_t trip_protector;\\nstd_interface_t std_interface;\\n\\nstatic void apply_tunable_params(void);\\n\\nvoid ctl_init(void)\\n{\\n    ctl_init_buck_ctrl(&buck_ctrl);\\n    ctl_init_ptr_adc_channel(&adc_channel);\\n    ctl_init_pwm_channel(&pwm_channel);\\n    ctl_init_vip_protection(&protection);\\n    ctl_init_trip_protector(&trip_protector);\\n    ctl_init_std_interface(&std_interface);\\n    \\n    ctl_attach_buck_ctrl_input(&buck_ctrl, &adc_channel.control_port, &adc_channel.control_port, &adc_channel.control_port);\\n    ctl_attach_vip_protection(&protection, &adc_channel.control_port, &adc_channel.control_port);\\n    \\n    apply_tunable_params();\\n    \\n    ctl_enable_pwm();\\n}\\n\\nvoid ctl_mainloop(void)\\n{\\n    ctl_step_ptr_adc_channel(&adc_channel);\\n    \\n    ctl_dispatch_fast_loop();\\n    \\n    ctl_step_pwm_channel(&pwm_channel, buck_ctrl.voltage_pid.output);\\n    \\n    ctl_dispatch_fault();\\n}\\n\\nvoid clear_all_controllers(void)\\n{\\n    ctl_clear_buck_ctrl(&buck_ctrl);\\n    ctl_clear_vip_protection(&protection);\\n    ctl_clear_trip_protector(&trip_protector);\\n}\\n\\nvoid tsk_protect(void)\\n{\\n    ctl_step_trip_protector(&trip_protector);\\n}\\n\\nvoid ctl_enable_pwm(void)\\n{\\n    pwm_channel.enable = 1;\\n}\\n\\nvoid ctl_disable_pwm(void)\\n{\\n    pwm_channel.enable = 0;\\n}\\n\\nstatic void apply_tunable_params(void)\\n{\\n    buck_ctrl.voltage_pid.kp = 0.5f;\\n    buck_ctrl.voltage_pid.ki = 0.1f;\\n    buck_ctrl.voltage_pid.kd = 0.01f;\\n    \\n    protection.voltage_max = 48.0f;\\n    protection.current_max = 10.0f;\\n    protection.power_max = 240.0f;\\n    \\n    trip_protector.warning_threshold = 0.8f;\\n    trip_protector.trip_threshold = 1.0f;\\n    trip_protector.fault_threshold = 1.2f;\\n}\\n\"\n}\n```"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4433,
+      "completion_tokens": 849,
+      "total_tokens": 5282,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 4433
+    },
+    "system_fingerprint": ""
+  },
+  "user_main.h": {
+    "id": "019d6c662f47bd4b6632076a05ed177b",
+    "object": "chat.completion",
+    "created": 1775640129,
+    "model": "deepseek-ai/DeepSeek-V3.2",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "```json\n{\n  \"content\": \"#ifndef USER_MAIN_H\\n#define USER_MAIN_H\\n\\n#include \\\"ctl/scheduler.h\\\"\\n#include \\\"ctl/at_core.h\\\"\\n#include \\\"ctl/component/digital_power/dcdc/buck.h\\\"\\n#include \\\"ctl/component/interface/adc_ptr_channel.h\\\"\\n#include \\\"ctl/component/interface/pwm_channel.h\\\"\\n#include \\\"ctl/component/digital_power/basic/protectoion_strategy.h\\\"\\n#include \\\"ctl/component/intrinsic/protection/itoc_protection.h\\\"\\n#include \\\"ctl/component/interface/gmp_standard_interface.h\\\"\\n#include \\\"ctl/component/digital_power.h\\\"\\n#include \\\"ctl/component/intrinsic.h\\\"\\n\\nextern buck_ctrl_t buck_ctrl;\\nextern ptr_adc_channel_t adc_channel;\\nextern pwm_channel_t pwm_channel;\\nextern std_vip_protection_t protection;\\nextern ctl_trip_protector_t trip_protector;\\nextern std_interface_t std_interface;\\n\\nvoid init(void);\\nvoid mainloop(void);\\nvoid setup_peripheral(void);\\nvoid ctl_init(void);\\nvoid ctl_mainloop(void);\\n\\n#endif /* USER_MAIN_H */\\n\"\n}\n```"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4092,
+      "completion_tokens": 302,
+      "total_tokens": 4394,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 4092
+    },
+    "system_fingerprint": ""
+  },
+  "user_main.c": {
+    "id": "019d6c6745916d5d8ba8374fc4813904",
+    "object": "chat.completion",
+    "created": 1775640200,
+    "model": "deepseek-ai/DeepSeek-V3.2",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "```json\n{\n  \"file_content\": \"#include \\\"gmp_core.h\\\"\\n#include \\\"user_main.h\\\"\\n#include \\\"ctl_main.h\\\"\\n\\n/* Global instances */\\nbuck_ctrl_t buck_ctrl;\\nptr_adc_channel_t adc_channel;\\npwm_channel_t pwm_channel;\\nstd_vip_protection_t protection;\\nctl_trip_protector_t trip_protector;\\nstd_interface_t std_interface;\\n\\n/* Scheduler task table */\\nstatic const gmp_task_t task_table[] = {\\n    { .task = tsk_protect, .period = 1000, .phase = 0, .enabled = 1 },\\n};\\n\\n/* Scheduler instance */\\nstatic gmp_scheduler_t scheduler = {\\n    .tasks = task_table,\\n    .task_count = sizeof(task_table) / sizeof(task_table[0]),\\n    .tick = 0\\n};\\n\\nvoid init(void)\\n{\\n    /* Initialize scheduler */\\n    gmp_scheduler_init(&scheduler);\\n    \\n    /* Initialize standard interface */\\n    ctl_init_std_interface(&std_interface);\\n    \\n    /* Initialize ADC channel */\\n    ctl_init_ptr_adc_channel(&adc_channel);\\n    \\n    /* Initialize PWM channel */\\n    ctl_init_pwm_channel(&pwm_channel);\\n    \\n    /* Initialize control modules */\\n    ctl_init();\\n}\\n\\nvoid mainloop(void)\\n{\\n    /* Dispatch scheduler tasks */\\n    gmp_scheduler_dispatch(&scheduler);\\n    \\n    /* Execute control main loop */\\n    ctl_mainloop();\\n}\\n\\nvoid setup_peripheral(void)\\n{\\n    /* Peripheral setup would go here */\\n}\\n\\nvoid ctl_init(void)\\n{\\n    /* Initialize buck controller */\\n    ctl_init_buck_ctrl(&buck_ctrl);\\n    \\n    /* Initialize protection */\\n    ctl_init_vip_protection(&protection);\\n    \\n    /* Initialize trip protector */\\n    ctl_init_trip_protector(&trip_protector);\\n    \\n    /* Clear all controllers */\\n    clear_all_controllers();\\n}\\n\\nvoid ctl_mainloop(void)\\n{\\n    /* Fast loop dispatch */\\n    ctl_dispatch_fast_loop();\\n    \\n    /* Fault dispatch */\\n    ctl_dispatch_fault();\\n    \\n    /* Non-blocking communication */\\n    if (ctl_check_comm_ready())\\n    {\\n        ctl_process_comm();\\n    }\\n}\\n\\nvoid clear_all_controllers(void)\\n{\\n    /* Clear controller states */\\n    ctl_clear_buck_ctrl(&buck_ctrl);\\n    ctl_clear_vip_protection(&protection);\\n    ctl_clear_trip_protector(&trip_protector);\\n}\\n\\nvoid tsk_protect(void)\\n{\\n    /* Protection task implementation */\\n    ctl_step_trip_protector(&trip_protector);\\n}\\n\\nvoid ctl_enable_pwm(void)\\n{\\n    /* Enable PWM output */\\n    ctl_enable_pwm_channel(&pwm_channel);\\n}\\n\\nvoid ctl_disable_pwm(void)\\n{\\n    /* Disable PWM output */\\n    ctl_disable_pwm_channel(&pwm_channel);\\n}\\n\"\n}\n```"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4688,
+      "completion_tokens": 816,
+      "total_tokens": 5504,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 4688
+    },
+    "system_fingerprint": ""
+  }
 }

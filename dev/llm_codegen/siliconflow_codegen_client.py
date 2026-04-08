@@ -56,6 +56,15 @@ def read_json(path: str):
         return json.load(f)
 
 
+def read_text_if_exists(path: str) -> str:
+    if not path:
+        return ""
+    if not os.path.exists(path):
+        return ""
+    with open(path, "r", encoding="utf-8-sig") as f:
+        return f.read().strip()
+
+
 def build_kb_indexes(kb_items: list):
     by_canonical = {}
     by_module = defaultdict(list)
@@ -161,7 +170,7 @@ def resolve_modules(control: dict, kb_items: list):
     return resolved
 
 
-def build_user_prompt(control: dict, resolved_modules: list, extra_instruction: str, render_profile: str) -> str:
+def build_user_prompt(control: dict, resolved_modules: list, extra_instruction: str, render_profile: str, experience_text: str) -> str:
     schedule = control.get("schedule") or {}
     links = control.get("links") or []
     compact_modules = json.dumps(resolved_modules, ensure_ascii=False, indent=2)
@@ -187,7 +196,7 @@ def build_user_prompt(control: dict, resolved_modules: list, extra_instruction: 
             "Profile target: ctl_main style. init maps to ctl_init(), fast_loop/slow_loop map to ctl_dispatch().\n"
         )
 
-    return (
+    prompt = (
         "Task: Generate control function-body statements for init/fast_loop/slow_loop/fault.\n"
         + profile_hint
         + "Hard constraints:\n"
@@ -216,6 +225,12 @@ def build_user_prompt(control: dict, resolved_modules: list, extra_instruction: 
         + (extra_instruction or "")
         + "\n"
     )
+
+    if experience_text:
+        prompt += "\nGeneration experience guidance (must follow when not conflicting with hard constraints):\n"
+        prompt += experience_text + "\n"
+
+    return prompt
 
 
 def call_chat(api_key: str, base_url: str, model: str, system_prompt: str, user_prompt: str, temperature: float, timeout: int):
@@ -281,6 +296,254 @@ def parse_sections(text: str) -> dict:
         if not isinstance(data[key], str):
             raise ValueError(f"output section is not string: {key}")
     return data
+
+
+def clean_llm_code_text(text: str) -> str:
+    cleaned = strip_code_fence(text).strip()
+
+    # Some model responses wrap file content in JSON, e.g. {"file_content":"...\\n..."}.
+    # Unwrap these payloads so written files keep real line breaks.
+    probe = cleaned
+    for _ in range(2):
+        try:
+            obj = json.loads(probe)
+        except Exception:
+            break
+
+        if isinstance(obj, dict):
+            if isinstance(obj.get("file_content"), str):
+                return obj["file_content"].strip()
+            if isinstance(obj.get("content"), str):
+                return obj["content"].strip()
+            break
+
+        if isinstance(obj, str):
+            probe = obj.strip()
+            continue
+
+        break
+
+    return cleaned
+
+
+def _normalize_escaped_file_text(text: str) -> str:
+    out = text.strip()
+
+    # Case 1: JSON-string style payload: "...\n...\"..."
+    if len(out) >= 2 and out[0] == '"' and out[-1] == '"':
+        try:
+            decoded = json.loads(out)
+            if isinstance(decoded, str):
+                out = decoded
+        except Exception:
+            pass
+
+    # Case 2: raw escaped blob (no real newlines, lots of escape sequences).
+    has_real_newline = "\n" in out
+    has_escaped_newline = "\\n" in out
+    if (not has_real_newline) and has_escaped_newline:
+        out = out.replace("\\r\\n", "\n")
+        out = out.replace("\\n", "\n")
+        out = out.replace("\\t", "    ")
+        out = out.replace('\\"', '"')
+
+    # Common cleanup for serialized responses.
+    out = out.replace("\r\n", "\n")
+    out = out.rstrip() + "\n"
+    return out
+
+
+def build_project_context(control: dict, resolved_modules: list) -> str:
+    schedule = control.get("schedule") or {}
+    links = control.get("links") or []
+    return (
+        "Resolved modules JSON:\n"
+        + json.dumps(resolved_modules, ensure_ascii=False, indent=2)
+        + "\n\nSchedule JSON:\n"
+        + json.dumps(schedule, ensure_ascii=False, indent=2)
+        + "\n\nLinks JSON:\n"
+        + json.dumps(links, ensure_ascii=False, indent=2)
+        + "\n"
+    )
+
+
+def _file_prompt_header(file_name: str) -> str:
+    return (
+        f"Task: Generate exactly one complete file: {file_name}.\n"
+        "Hard constraints:\n"
+        "1) Return file content only, no markdown fences, no prose.\n"
+        "2) Keep C/C header syntax valid and compilable.\n"
+        "3) Use only known API names from resolved modules; do not invent APIs.\n"
+        "4) Keep style close to GMP ctl_main/user_main references.\n"
+        "5) Include function declarations/definitions needed for this file only.\n\n"
+    )
+
+
+def build_single_file_prompt(file_key: str, control: dict, resolved_modules: list, generated_so_far: dict, validation_feedback: str = "", experience_text: str = "") -> str:
+    ctx = build_project_context(control, resolved_modules)
+    feedback_block = ""
+    if validation_feedback:
+        feedback_block = (
+            "\nPrevious validation failure to fix in this retry:\n"
+            + validation_feedback
+            + "\n"
+        )
+
+    if file_key == "ctl_main.h":
+        prompt = (
+            _file_prompt_header("ctl_main.h")
+            + "Required content:\n"
+            + "- Include required ctl/component/framework headers.\n"
+            + "- Extern declarations for controller global instances.\n"
+            + "- Prototypes: ctl_init, ctl_mainloop, clear_all_controllers, tsk_protect, ctl_enable_pwm, ctl_disable_pwm.\n"
+            + "- Inline dispatch function prototype/definition location should be header-friendly.\n\n"
+            + ctx
+            + feedback_block
+        )
+        if experience_text:
+            prompt += "\nGeneration experience guidance:\n" + experience_text + "\n"
+        return prompt
+
+    if file_key == "ctl_main.c":
+        dep = generated_so_far.get("ctl_main.h", "")
+        prompt = (
+            _file_prompt_header("ctl_main.c")
+            + "Required content:\n"
+            + "- Include gmp headers + ctl_main.h.\n"
+            + "- Define all global controller instances declared in ctl_main.h.\n"
+            + "- Implement ctl_init, ctl_mainloop, clear_all_controllers, tsk_protect, ctl_enable_pwm, ctl_disable_pwm.\n"
+            + "- Initialize CiA402 and motor protection path.\n"
+            + "- Bind tunable parameter apply hook in ctl_init.\n\n"
+            + "Reference from previously generated ctl_main.h:\n"
+            + dep
+            + "\n\n"
+            + ctx
+            + feedback_block
+        )
+        if experience_text:
+            prompt += "\nGeneration experience guidance:\n" + experience_text + "\n"
+        return prompt
+
+    if file_key == "user_main.h":
+        prompt = (
+            _file_prompt_header("user_main.h")
+            + "Required content:\n"
+            + "- Include scheduler/AT core headers.\n"
+            + "- Extern declarations for user_main global objects.\n"
+            + "- Prototypes: init, mainloop, setup_peripheral, ctl_init, ctl_mainloop.\n"
+            + "- Keep C extern guard style.\n\n"
+            + ctx
+            + feedback_block
+        )
+        if experience_text:
+            prompt += "\nGeneration experience guidance:\n" + experience_text + "\n"
+        return prompt
+
+    if file_key == "user_main.c":
+        dep_h = generated_so_far.get("user_main.h", "")
+        dep_ctl_h = generated_so_far.get("ctl_main.h", "")
+        prompt = (
+            _file_prompt_header("user_main.c")
+            + "Required content:\n"
+            + "- Include gmp_core.h, user_main.h, ctl_main.h.\n"
+            + "- Create scheduler and task table that includes tsk_protect.\n"
+            + "- Implement init() and mainloop() around scheduler dispatch.\n"
+            + "- Keep communication part minimal and non-blocking.\n\n"
+            + "Reference from previously generated user_main.h:\n"
+            + dep_h
+            + "\n\nReference from previously generated ctl_main.h:\n"
+            + dep_ctl_h
+            + "\n\n"
+            + ctx
+            + feedback_block
+        )
+        if experience_text:
+            prompt += "\nGeneration experience guidance:\n" + experience_text + "\n"
+        return prompt
+
+    raise ValueError(f"unsupported file key: {file_key}")
+
+
+def _validate_single_file_output(file_name: str, text: str):
+    if not text.strip():
+        raise RuntimeError(f"empty output for {file_name}")
+
+    required_patterns = {
+        "ctl_main.h": [
+            r"\bctl_init\s*\(",
+            r"\bctl_mainloop\s*\(",
+            r"\bclear_all_controllers\s*\(",
+        ],
+        "ctl_main.c": [
+            r"\bctl_init\s*\(",
+            r"\bctl_mainloop\s*\(",
+            r"\btsk_protect\s*\(",
+        ],
+        "user_main.h": [
+            r"\binit\s*\(",
+            r"\bmainloop\s*\(",
+            r"\bsetup_peripheral\s*\(",
+        ],
+        "user_main.c": [
+            r"\binit\s*\(",
+            r"\bmainloop\s*\(",
+            r"\bgmp_scheduler_dispatch\s*\(",
+        ],
+    }
+    for pattern in required_patterns.get(file_name, []):
+        if re.search(pattern, text) is None:
+            raise RuntimeError(f"missing required pattern in {file_name}: {pattern}")
+
+
+def generate_four_project_files(api_key: str, base_url: str, model: str, system_prompt: str, temperature: float, timeout: int, control: dict, resolved_modules: list, output_dir: str, max_attempts_per_file: int = 3, experience_text: str = ""):
+    file_order = ["ctl_main.h", "ctl_main.c", "user_main.h", "user_main.c"]
+    generated = {}
+    raw_by_file = {}
+    prompt_by_file = {}
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    for file_name in file_order:
+        last_error = ""
+        success = False
+        for attempt in range(1, max(1, max_attempts_per_file) + 1):
+            user_prompt = build_single_file_prompt(file_name, control, resolved_modules, generated, last_error, experience_text)
+            resp_json = call_chat(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                timeout=timeout,
+            )
+            text = extract_text(resp_json)
+            if not text:
+                last_error = f"empty model response for {file_name}"
+                continue
+
+            cleaned = clean_llm_code_text(text)
+            cleaned = _normalize_escaped_file_text(cleaned)
+            try:
+                _validate_single_file_output(file_name, cleaned)
+            except Exception as e:
+                last_error = str(e)
+                continue
+
+            generated[file_name] = cleaned
+            raw_by_file[file_name] = resp_json
+            prompt_by_file[file_name] = user_prompt
+            out_path = os.path.join(output_dir, file_name)
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(cleaned)
+            print(f"[project4] generated {file_name} ({attempt}/{max_attempts_per_file}) -> {out_path}")
+            success = True
+            break
+
+        if not success:
+            raise RuntimeError(f"failed to generate valid file after retries: {file_name}; last_error={last_error}")
+
+    return generated, raw_by_file, prompt_by_file
 
 
 def normalize_body(body: str) -> str:
@@ -790,15 +1053,18 @@ def main():
     parser.add_argument(
         "--render-profile",
         default="generic",
-        choices=["generic", "ctl_main"],
+        choices=["generic", "ctl_main", "project4"],
         help="Output rendering profile",
     )
+    parser.add_argument("--out-dir", default="", help="Output directory for multi-file generation mode")
     parser.add_argument("--extra", default="", help="Extra instruction for this generation")
     parser.add_argument("--model", default="", help="Model name (overrides llm config)")
     parser.add_argument("--base-url", default="", help="SiliconFlow base URL (overrides llm config)")
     parser.add_argument("--temperature", type=float, default=None, help="Sampling temperature (overrides llm config)")
     parser.add_argument("--timeout", type=int, default=None, help="HTTP timeout seconds (overrides llm config)")
     parser.add_argument("--system", default="", help="System prompt (overrides llm config)")
+    parser.add_argument("--max-file-attempts", type=int, default=None, help="Max retries per file in project4 mode (overrides llm config)")
+    parser.add_argument("--experience-md", default="dev/llm_codegen/generation_experience.md", help="Path to generation experience markdown file")
     args = parser.parse_args()
 
     llm_cfg = read_llm_settings(args.llm_config)
@@ -806,7 +1072,9 @@ def main():
     base_url = args.base_url or str(llm_cfg.get("base_url") or "")
     temperature = args.temperature if args.temperature is not None else float(llm_cfg.get("temperature") or 0.0)
     timeout = args.timeout if args.timeout is not None else int(llm_cfg.get("timeout") or 180)
+    max_file_attempts = args.max_file_attempts if args.max_file_attempts is not None else int(llm_cfg.get("max_project4_file_attempts") or 3)
     system_prompt = args.system or str((llm_cfg.get("system_prompts") or {}).get("codegen") or DEFAULT_SYSTEM_PROMPT)
+    experience_text = read_text_if_exists(args.experience_md)
 
     api_key = resolve_api_key(llm_cfg)
     if not api_key:
@@ -818,7 +1086,59 @@ def main():
     resolved_modules = resolve_modules(control, kb)
     _validate_resolved_instance_types(control, resolved_modules)
 
-    user_prompt = build_user_prompt(control, resolved_modules, args.extra, args.render_profile)
+    if args.render_profile == "project4":
+        generated, raw_by_file, prompt_by_file = generate_four_project_files(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            timeout=timeout,
+            control=control,
+            resolved_modules=resolved_modules,
+            output_dir=(args.out_dir or os.path.dirname(os.path.abspath(args.out)) or os.getcwd()),
+            max_attempts_per_file=max_file_attempts,
+            experience_text=experience_text,
+        )
+
+        output_dir = args.out_dir or os.path.dirname(os.path.abspath(args.out)) or os.getcwd()
+
+        # Keep compatibility: write a small manifest into --out.
+        manifest = {
+            "mode": "project4",
+            "files": [os.path.join(output_dir, x) for x in ["ctl_main.h", "ctl_main.c", "user_main.h", "user_main.c"]],
+            "generated_at": datetime.now().isoformat(),
+        }
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+        if args.raw:
+            os.makedirs(os.path.dirname(os.path.abspath(args.raw)), exist_ok=True)
+            with open(args.raw, "w", encoding="utf-8") as f:
+                json.dump(raw_by_file, f, ensure_ascii=False, indent=2)
+
+        if args.prompt_out:
+            os.makedirs(os.path.dirname(os.path.abspath(args.prompt_out)), exist_ok=True)
+            with open(args.prompt_out, "w", encoding="utf-8") as f:
+                for file_name in ["ctl_main.h", "ctl_main.c", "user_main.h", "user_main.c"]:
+                    f.write(f"===== PROMPT {file_name} =====\n")
+                    f.write(prompt_by_file[file_name])
+                    f.write("\n\n")
+
+        print("Generation success (project4)")
+        print(f"Model: {model}")
+        print(f"Output directory: {output_dir}")
+        for file_name in ["ctl_main.h", "ctl_main.c", "user_main.h", "user_main.c"]:
+            print(f"File: {os.path.join(output_dir, file_name)}")
+        if args.raw:
+            print(f"Raw: {args.raw}")
+        if args.prompt_out:
+            print(f"Prompt: {args.prompt_out}")
+        print(f"Time: {datetime.now().isoformat()}")
+        return 0
+
+    user_prompt = build_user_prompt(control, resolved_modules, args.extra, args.render_profile, experience_text)
     if args.prompt_out:
         os.makedirs(os.path.dirname(os.path.abspath(args.prompt_out)), exist_ok=True)
         with open(args.prompt_out, "w", encoding="utf-8") as f:
