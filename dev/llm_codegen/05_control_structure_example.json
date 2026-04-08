@@ -1,0 +1,67 @@
+{
+  "project": {
+    "name": "mcs_pmsm_nt_demo",
+    "target": "GMP_CTL",
+    "notes": "Example for LLM body generation + local completion"
+  },
+  "modules": [
+    {
+      "instance_name": "motor_ift",
+      "module_id": "MC_INTERFACE",
+      "params": {},
+      "schedule_hint": "init"
+    },
+    {
+      "instance_name": "current_loop",
+      "module_id": "CURRENT_CONTROLLER",
+      "params": {
+        "kp_d": 0.2,
+        "ki_d": 10.0,
+        "kp_q": 0.2,
+        "ki_q": 10.0
+      },
+      "schedule_hint": "fast_loop"
+    },
+    {
+      "instance_name": "spd_loop",
+      "module_id": "LADRC_SPEED_PU",
+      "params": {
+        "fc": 200.0,
+        "fo": 800.0
+      },
+      "schedule_hint": "slow_loop"
+    },
+    {
+      "instance_name": "svpwm",
+      "module_id": "MC_SVPWM",
+      "params": {
+        "duty_min": 0.02,
+        "duty_max": 0.98
+      },
+      "schedule_hint": "fast_loop"
+    }
+  ],
+  "links": [
+    {
+      "from": "motor_ift.current_feedback",
+      "to": "current_loop.current_feedback",
+      "signal": "i_abc"
+    },
+    {
+      "from": "spd_loop.iq_ref",
+      "to": "current_loop.iq_ref",
+      "signal": "iq_ref"
+    },
+    {
+      "from": "current_loop.vdq_ref",
+      "to": "svpwm.vdq_cmd",
+      "signal": "vdq"
+    }
+  ],
+  "schedule": {
+    "init": ["motor_ift", "current_loop", "spd_loop", "svpwm"],
+    "fast_loop": ["current_loop", "svpwm"],
+    "slow_loop": ["spd_loop"],
+    "fault": []
+  }
+}

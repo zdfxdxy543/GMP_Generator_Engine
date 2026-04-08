@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gmp://schemas/control_structure.schema.json",
+  "title": "Control Structure Input",
+  "type": "object",
+  "required": ["project", "modules", "links", "schedule"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name", "target"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "notes": { "type": "string" }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["instance_name"],
+        "oneOf": [
+          { "required": ["canonical_id"] },
+          { "required": ["module_id"] }
+        ],
+        "properties": {
+          "instance_name": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "canonical_id": { "type": "string", "minLength": 1 },
+          "module_id": { "type": "string", "minLength": 1 },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": ["string", "number", "integer", "boolean", "array", "object", "null"]
+            }
+          },
+          "schedule_hint": {
+            "type": "string",
+            "enum": ["init", "fast_loop", "slow_loop", "fault", "background"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "signal": { "type": "string" },
+          "comment": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "required": ["init", "fast_loop"],
+      "properties": {
+        "init": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "fast_loop": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "slow_loop": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "fault": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

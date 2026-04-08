@@ -1,0 +1,30 @@
+{
+  "id": "019d6848879143e755feb3e081361e0b",
+  "object": "chat.completion",
+  "created": 1775571077,
+  "model": "deepseek-ai/DeepSeek-V3.2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n    \"init\": \"ERROR_UNRESOLVED_API(motor_if);\\nERROR_UNRESOLVED_API(mech_ctrl);\\nERROR_UNRESOLVED_API(mtr_ctrl);\\nERROR_UNRESOLVED_API(spwm);\",\n    \"fast_loop\": \"ERROR_UNRESOLVED_API(mech_ctrl);\\nERROR_UNRESOLVED_API(mtr_ctrl);\\nERROR_UNRESOLVED_API(spwm);\",\n    \"slow_loop\": \"\",\n    \"fault\": \"\"\n}\n```"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 2157,
+    "completion_tokens": 117,
+    "total_tokens": 2274,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "cached_tokens": 2048
+    },
+    "prompt_cache_hit_tokens": 2048,
+    "prompt_cache_miss_tokens": 109
+  },
+  "system_fingerprint": ""
+}

@@ -1,0 +1,241 @@
+Task: Generate control function-body statements for init/fast_loop/slow_loop/fault.
+Profile target: ctl_main style. init maps to ctl_init(), fast_loop/slow_loop map to ctl_dispatch().
+Hard constraints:
+1) Return STRICT JSON object only, no markdown, no prose.
+2) JSON keys MUST be exactly: init, fast_loop, slow_loop, fault.
+3) Each value is C statements only (no outer braces, no declarations, no comments).
+4) Use only function names from api_contract.step/api_contract.attach for each module.
+5) Never invent new API names.
+6) Respect schedule order exactly.
+7) For required fast_loop/slow_loop calls only: if API missing, emit ERROR_UNRESOLVED_API(instance_name).
+
+Resolved modules JSON:
+[
+  {
+    "instance_name": "motor_if",
+    "schedule_hint": "init",
+    "params": {},
+    "canonical_id": "MC_INTERFACE__motor_control_interface_motor_universal_interface",
+    "module_id": "MC_INTERFACE",
+    "module_name": "Motor Control Interface",
+    "file": "ctl/component/motor_control/interface/motor_universal_interface.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_adc_channels",
+          "signature": "ctl_attach_mtr_adc_channels(mtr_ift* mtr, tri_adc_ift* _iabc, tri_adc_ift* _uabc, adc_ift* _idc,\r\n    adc_ift* _udc)"
+        },
+        {
+          "function": "ctl_attach_mtr_current",
+          "signature": "ctl_attach_mtr_current(mtr_ift* mtr, tri_adc_ift* _iabc)"
+        },
+        {
+          "function": "ctl_attach_mtr_position",
+          "signature": "ctl_attach_mtr_position(mtr_ift* mtr, rotation_ift* pos)"
+        },
+        {
+          "function": "ctl_attach_mtr_velocity",
+          "signature": "ctl_attach_mtr_velocity(mtr_ift* mtr, velocity_ift* vel)"
+        },
+        {
+          "function": "ctl_attach_mtr_torque",
+          "signature": "ctl_attach_mtr_torque(mtr_ift* mtr, torque_ift* torque)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": [
+          {
+            "field": "speed",
+            "desc": "@brief Mechanical speed output, in per-unit (p.u.)."
+          },
+          {
+            "field": "torque",
+            "desc": "@brief Mechanical torque output, in per-unit (p.u.)."
+          }
+        ]
+      },
+      "confidence": "low"
+    }
+  },
+  {
+    "instance_name": "mech_ctrl",
+    "schedule_hint": "fast_loop",
+    "params": {
+      "speed_limit": 1.0,
+      "cur_limit": 0.3
+    },
+    "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
+    "module_id": "MECHANICAL_CONTROLLER",
+    "module_name": "Mechanical Loop Controller (PU System)",
+    "file": "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mech_ctrl",
+          "signature": "ctl_step_mech_ctrl(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_mech_ctrl_pip",
+          "signature": "ctl_step_mech_ctrl_pip(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mech_ctrl",
+          "signature": "ctl_attach_mech_ctrl(ctl_mech_ctrl_t* ctrl, rotation_ift* pos_if, velocity_ift* spd_if)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "mtr_ctrl",
+    "schedule_hint": "fast_loop",
+    "params": {
+      "voltage_limit_max": 0.95,
+      "voltage_limit_min": -0.95
+    },
+    "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core",
+    "module_id": "CURRENT_CONTROLLER",
+    "module_name": "FOC Current Controller",
+    "file": "ctl/component/motor_control/current_loop/foc_core.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_current_controller",
+          "signature": "ctl_step_current_controller(mtr_current_ctrl_t* mc)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_current_ctrl_port",
+          "signature": "ctl_attach_mtr_current_ctrl_port(mtr_current_ctrl_t* mc, tri_adc_ift* _iabc, adc_ift* _udc,\r\n                                                        rotation_ift* _pos_if, velocity_ift* _vec_if)"
+        },
+        {
+          "function": "ctl_attach_mtr_current_ctrl_phasor",
+          "signature": "ctl_attach_mtr_current_ctrl_phasor(mtr_current_ctrl_t* mc, ctl_vector2_t* _phasor)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "spwm",
+    "schedule_hint": "fast_loop",
+    "params": {},
+    "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator",
+    "module_id": "CTL_TP_MODULATION_API",
+    "module_name": "Three-Phase Modulation API",
+    "file": "ctl/component/interface/spwm_modulator.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [
+        {
+          "function": "ctl_step_spwm_modulator",
+          "signature": "ctl_step_spwm_modulator(spwm_modulator_t* mod)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_svpwm_modulator",
+          "signature": "ctl_step_svpwm_modulator(spwm_modulator_t* mod)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "medium"
+    }
+  }
+]
+
+Allowed function names JSON:
+["ctl_attach_mech_ctrl", "ctl_attach_mtr_adc_channels", "ctl_attach_mtr_current", "ctl_attach_mtr_current_ctrl_phasor", "ctl_attach_mtr_current_ctrl_port", "ctl_attach_mtr_position", "ctl_attach_mtr_torque", "ctl_attach_mtr_velocity", "ctl_step_current_controller", "ctl_step_mech_ctrl", "ctl_step_mech_ctrl_pip", "ctl_step_spwm_modulator", "ctl_step_svpwm_modulator"]
+
+Links JSON:
+[
+  {
+    "from": "motor_if.speed",
+    "to": "mech_ctrl.vel_feedback",
+    "signal": "speed_pu"
+  },
+  {
+    "from": "mech_ctrl.iq_ref",
+    "to": "mtr_ctrl.current_ref_q",
+    "signal": "iq_ref"
+  },
+  {
+    "from": "mtr_ctrl.vab0",
+    "to": "spwm.vab0_in",
+    "signal": "vab0"
+  }
+]
+
+Schedule JSON:
+{
+  "init": [
+    "motor_if",
+    "mech_ctrl",
+    "mtr_ctrl",
+    "spwm"
+  ],
+  "fast_loop": [
+    "mech_ctrl",
+    "mtr_ctrl",
+    "spwm"
+  ],
+  "slow_loop": [],
+  "fault": []
+}
+
+Output JSON template:
+{"init":"...","fast_loop":"...","slow_loop":"...","fault":"..."}
+
+Extra instruction:
+

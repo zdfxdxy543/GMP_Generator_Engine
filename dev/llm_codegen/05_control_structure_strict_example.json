@@ -1,0 +1,32 @@
+{
+  "project": {
+    "name": "strict_codegen_demo",
+    "target": "GMP_CTL",
+    "notes": "Strict canonical-id demo for deterministic body generation"
+  },
+  "modules": [
+    {
+      "instance_name": "boost_ctrl",
+      "canonical_id": "boost_controller_api__digital_power_dcdc_boost",
+      "params": {
+        "vref": 380.0
+      },
+      "schedule_hint": "fast_loop"
+    },
+    {
+      "instance_name": "buck_ctrl",
+      "canonical_id": "buck_controller_api__digital_power_dcdc_buck",
+      "params": {
+        "vref": 48.0
+      },
+      "schedule_hint": "fast_loop"
+    }
+  ],
+  "links": [],
+  "schedule": {
+    "init": ["boost_ctrl", "buck_ctrl"],
+    "fast_loop": ["boost_ctrl", "buck_ctrl"],
+    "slow_loop": [],
+    "fault": []
+  }
+}

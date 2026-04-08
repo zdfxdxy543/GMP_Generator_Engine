@@ -1,0 +1,72 @@
+{
+  "project": {
+    "name": "nl_pmsm_speed_demo",
+    "target": "GMP_CTL",
+    "notes": "Generated from natural language instruction",
+    "generated_at": "2026-04-07T22:11:14.220040"
+  },
+  "modules": [
+    {
+      "instance_name": "motor_if",
+      "canonical_id": "MC_INTERFACE__motor_control_interface_motor_universal_interface",
+      "params": {},
+      "schedule_hint": "init"
+    },
+    {
+      "instance_name": "mech_ctrl",
+      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
+      "params": {
+        "speed_limit": 1.0,
+        "cur_limit": 0.3
+      },
+      "schedule_hint": "fast_loop"
+    },
+    {
+      "instance_name": "mtr_ctrl",
+      "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core",
+      "params": {
+        "voltage_limit_max": 0.95,
+        "voltage_limit_min": -0.95
+      },
+      "schedule_hint": "fast_loop"
+    },
+    {
+      "instance_name": "spwm",
+      "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator",
+      "params": {},
+      "schedule_hint": "fast_loop"
+    }
+  ],
+  "links": [
+    {
+      "from": "motor_if.speed",
+      "to": "mech_ctrl.vel_feedback",
+      "signal": "speed_pu"
+    },
+    {
+      "from": "mech_ctrl.iq_ref",
+      "to": "mtr_ctrl.current_ref_q",
+      "signal": "iq_ref"
+    },
+    {
+      "from": "mtr_ctrl.vab0",
+      "to": "spwm.vab0_in",
+      "signal": "vab0"
+    }
+  ],
+  "schedule": {
+    "init": [
+      "motor_if",
+      "mech_ctrl",
+      "mtr_ctrl",
+      "spwm"
+    ],
+    "fast_loop": [
+      "mech_ctrl",
+      "mtr_ctrl",
+      "spwm"
+    ],
+    "slow_loop": [],
+    "fault": []
+  }
+}
