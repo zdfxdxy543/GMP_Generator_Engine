@@ -3,11 +3,11 @@
     "name": "PMSM_Speed_Control",
     "target": "GMP_CTL",
     "notes": "永磁同步电机速度控制程序",
-    "generated_at": "2026-04-08T08:46:12.544004"
+    "generated_at": "2026-04-08T13:28:13.073687"
   },
   "modules": [
     {
-      "instance_name": "pmsm_motor_params",
+      "instance_name": "motor_params",
       "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t"
     },
     {
@@ -15,28 +15,28 @@
       "canonical_id": "hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301"
     },
     {
-      "instance_name": "adc_channel_ia",
+      "instance_name": "adc_channel",
       "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel"
     },
     {
-      "instance_name": "adc_channel_ib",
-      "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel"
+      "instance_name": "pwm_channel",
+      "canonical_id": "PWM_CHANNEL_SINGLE__interface_pwm_channel"
     },
     {
       "instance_name": "encoder",
       "canonical_id": "MC_ENCODER__motor_control_interface_encoder"
     },
     {
-      "instance_name": "pwm_modulator",
-      "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator"
+      "instance_name": "speed_controller",
+      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl"
     },
     {
       "instance_name": "current_controller",
       "canonical_id": "CURRENT_CONTROLLER__motor_control_current_loop_foc_core"
     },
     {
-      "instance_name": "speed_controller",
-      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl"
+      "instance_name": "modulator",
+      "canonical_id": "CTL_TP_MODULATION_API__interface_spwm_modulator"
     },
     {
       "instance_name": "motor_protection",
@@ -45,23 +45,21 @@
     {
       "instance_name": "trip_protector",
       "canonical_id": "trip_protector__intrinsic_protection_itoc_protection"
+    },
+    {
+      "instance_name": "mc_lib",
+      "canonical_id": "CTL_MC_LIB__motor_control"
+    },
+    {
+      "instance_name": "intrinsic_lib",
+      "canonical_id": "CTL_INTRINSIC_LIB__intrinsic"
     }
   ],
   "links": [
     {
-      "from": "adc_channel_ia",
+      "from": "adc_channel",
       "to": "current_controller",
-      "signal": "ia_measured"
-    },
-    {
-      "from": "adc_channel_ib",
-      "to": "current_controller",
-      "signal": "ib_measured"
-    },
-    {
-      "from": "encoder",
-      "to": "current_controller",
-      "signal": "theta_mech"
+      "signal": "phase_currents"
     },
     {
       "from": "encoder",
@@ -71,36 +69,46 @@
     {
       "from": "speed_controller",
       "to": "current_controller",
-      "signal": "iq_reference"
+      "signal": "current_reference"
     },
     {
       "from": "current_controller",
-      "to": "pwm_modulator",
-      "signal": "v_alpha_beta"
+      "to": "modulator",
+      "signal": "modulation_signals"
+    },
+    {
+      "from": "modulator",
+      "to": "pwm_channel",
+      "signal": "pwm_duty_cycles"
+    },
+    {
+      "from": "adc_channel",
+      "to": "motor_protection",
+      "signal": "current_monitoring"
     },
     {
       "from": "motor_protection",
-      "to": "current_controller",
+      "to": "trip_protector",
       "signal": "fault_status"
     },
     {
       "from": "trip_protector",
-      "to": "motor_protection",
-      "signal": "trip_signal"
+      "to": "pwm_channel",
+      "signal": "pwm_disable"
     }
   ],
   "schedule": {
     "init": [
-      "pmsm_motor_params",
+      "motor_params",
       "inverter_hal",
-      "adc_channel_ia",
-      "adc_channel_ib",
-      "encoder",
-      "pwm_modulator"
+      "pwm_channel",
+      "modulator",
+      "encoder"
     ],
     "fast_loop": [
-      "current_controller",
+      "adc_channel",
       "speed_controller",
+      "current_controller",
       "motor_protection"
     ],
     "slow_loop": [],

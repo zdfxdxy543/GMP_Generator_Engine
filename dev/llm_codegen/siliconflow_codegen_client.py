@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import difflib
 import json
 import os
 import re
@@ -34,6 +35,20 @@ C_KEYWORDS = {
     "return",
     "sizeof",
 }
+
+GENERIC_CTL_INCLUDES = [
+    "#include <gmp_core.h>",
+    "#include <xplt.peripheral.h>",
+    "#include <ctrl_settings.h>",
+    "#include <core/pm/function_scheduler.h>",
+    "#include <ctl/framework/cia402_state_machine.h>",
+    "#include <ctl/component/interface/adc_channel.h>",
+    "#include <ctl/component/interface/pwm_channel.h>",
+    "#include <ctl/component/interface/spwm_modulator.h>",
+    "#include <ctl/component/motor_control/basic/mtr_protection.h>",
+    "#include <ctl/component/motor_control/current_loop/foc_core.h>",
+    "#include <ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h>",
+]
 
 
 def read_json(path: str):
@@ -359,7 +374,140 @@ def _build_instance_declarations(resolved_modules: list) -> str:
             lines.append(f"static {type_name} {inst};")
         else:
             lines.append(f"// unresolved type for instance: {inst} ({mod.get('canonical_id')})")
+            # Keep symbol available even when KB lacks enough type metadata.
+            lines.append(f"static uint8_t {inst};")
     return "\n".join(lines)
+
+
+def _build_framework_globals(resolved_modules: list) -> str:
+    lower_names = {str(m.get("instance_name") or "").lower() for m in resolved_modules}
+    lines = [
+        "// framework globals",
+        "cia402_sm_t cia402_sm;",
+        "volatile fast_gt flag_system_running = 0;",
+        "volatile fast_gt flag_error = 0;",
+    ]
+    if "protection" not in lower_names and "motor_protection" not in lower_names:
+        lines.append("ctl_mtr_protect_t protection;")
+    return "\n".join(lines)
+
+
+def _pick_protection_instance(resolved_modules: list) -> str:
+    for mod in resolved_modules:
+        name = str(mod.get("instance_name") or "")
+        low = name.lower()
+        cid = str(mod.get("canonical_id") or "").lower()
+        if "protect" in low or "protection" in low or "protect" in cid:
+            return name
+    return "protection"
+
+
+def _validate_resolved_instance_types(control: dict, resolved_modules: list):
+    by_instance = {m.get("instance_name"): m for m in resolved_modules}
+    schedule = control.get("schedule") or {}
+    unresolved = []
+    # Enforce hard typing only for loop phases that must be runnable.
+    for phase in ("fast_loop", "slow_loop"):
+        for inst in (schedule.get(phase) or []):
+            mod = by_instance.get(inst)
+            if not mod:
+                unresolved.append((phase, inst, "instance not resolved from KB"))
+                continue
+            if _infer_instance_type(mod) is None:
+                unresolved.append((phase, inst, f"missing inferable instance type ({mod.get('canonical_id')})"))
+
+    if unresolved:
+        details = " | ".join([f"{p}:{i}: {r}" for p, i, r in unresolved])
+        raise RuntimeError("unresolved typed instances in scheduled path: " + details)
+
+
+def _build_clear_all_controllers(resolved_modules: list) -> str:
+    lines = [
+        "void clear_all_controllers(void)",
+        "{",
+    ]
+    for mod in resolved_modules:
+        inst = mod.get("instance_name")
+        api = mod.get("api_contract") or {}
+        steps = [x.get("function") for x in (api.get("step") or []) if x.get("function")]
+        if not inst:
+            continue
+        for fn in steps:
+            clear_fn = fn.replace("ctl_step_", "ctl_clear_")
+            lines.append(f"    // Optional clear hook: {clear_fn}(&{inst});")
+            break
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _build_framework_hooks(protection_name: str) -> str:
+    return (
+        "gmp_task_status_t tsk_protect(gmp_task_t* tsk)\n"
+        "{\n"
+        "    GMP_UNUSED_VAR(tsk);\n"
+        "#ifdef ENABLE_MOTOR_FAULT_PROTECTION\n"
+        f"    if (ctl_dispatch_mtr_protect_slow(&{protection_name}))\n"
+        "    {\n"
+        "        cia402_fault_request(&cia402_sm);\n"
+        "    }\n"
+        "#endif\n"
+        "    return GMP_TASK_DONE;\n"
+        "}\n\n"
+        "void ctl_enable_pwm(void)\n"
+        "{\n"
+        "    ctl_fast_enable_output();\n"
+        "}\n\n"
+        "void ctl_disable_pwm(void)\n"
+        "{\n"
+        "    ctl_fast_disable_output();\n"
+        "}\n"
+    )
+
+
+def _closest_allowed_name(fn: str, allowed: list[str]) -> str | None:
+    if not allowed:
+        return None
+    choices = difflib.get_close_matches(fn, allowed, n=1, cutoff=0.78)
+    return choices[0] if choices else None
+
+
+def _repair_and_restrict_calls(sections: dict, resolved_modules: list) -> dict:
+    allowed = []
+    for mod in resolved_modules:
+        api = mod.get("api_contract") or {}
+        for x in (api.get("step") or []):
+            fn = x.get("function")
+            if fn:
+                allowed.append(fn)
+        for x in (api.get("attach") or []):
+            fn = x.get("function")
+            if fn:
+                allowed.append(fn)
+    allowed = sorted(set(allowed))
+
+    repaired = {}
+    for phase in ("init", "fast_loop", "slow_loop", "fault"):
+        src = sections.get(phase) or ""
+        out_lines = []
+        for line in src.splitlines():
+            updated = line
+            calls = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", line)
+            drop_line = False
+            for fn in calls:
+                if fn in C_KEYWORDS or fn in allowed:
+                    continue
+                fixed = _closest_allowed_name(fn, allowed)
+                if fixed:
+                    updated = re.sub(rf"\b{re.escape(fn)}\b", fixed, updated)
+                else:
+                    # Restrict unknown/nonexistent function calls from generated code.
+                    drop_line = True
+                    break
+            if not drop_line and updated.strip():
+                out_lines.append(updated)
+        repaired[phase] = "\n".join(out_lines)
+
+    return repaired
 
 
 def _to_c_scalar(value):
@@ -453,7 +601,13 @@ def render_ctl_main_output(sections: dict, resolved_modules: list) -> str:
     slow_body = indent_block(sections.get("slow_loop", ""))
     fault_body = indent_block(sections.get("fault", ""))
     declarations = _build_instance_declarations(resolved_modules)
+    globals_block = _build_framework_globals(resolved_modules)
     tunable_storage = _build_tunable_storage(resolved_modules)
+    clear_helpers = _build_clear_all_controllers(resolved_modules)
+    protection_name = _pick_protection_instance(resolved_modules)
+    framework_hooks = _build_framework_hooks(protection_name)
+
+    includes = "\n".join(GENERIC_CTL_INCLUDES)
 
     dispatch_extra = ""
     if slow_body:
@@ -463,14 +617,19 @@ def render_ctl_main_output(sections: dict, resolved_modules: list) -> str:
 
     return (
         "// generated ctl_main-style code body\n\n"
-        + "#include <stdbool.h>\n"
-        + "#include <stdint.h>\n\n"
+        + includes
+        + "\n\n"
         + declarations
+        + "\n\n"
+        + globals_block
         + "\n\n"
         + tunable_storage
         + "\n"
         "void ctl_init(void)\n"
         "{\n"
+        "    ctl_disable_pwm();\n"
+        "    init_cia402_state_machine(&cia402_sm);\n"
+        f"    ctl_init_mtr_protect(&{protection_name}, CONTROLLER_FREQUENCY);\n"
         "    ctl_apply_tunable_params();\n"
         f"{init_body}\n"
         "}\n\n"
@@ -482,6 +641,10 @@ def render_ctl_main_output(sections: dict, resolved_modules: list) -> str:
         "{\n"
         "    cia402_dispatch(&cia402_sm);\n"
         "}\n"
+        "\n"
+        + clear_helpers
+        + "\n\n"
+        + framework_hooks
     )
 
 
@@ -653,6 +816,7 @@ def main():
     control = read_json(args.control)
     kb = read_json(args.kb)
     resolved_modules = resolve_modules(control, kb)
+    _validate_resolved_instance_types(control, resolved_modules)
 
     user_prompt = build_user_prompt(control, resolved_modules, args.extra, args.render_profile)
     if args.prompt_out:
@@ -680,6 +844,7 @@ def main():
     except Exception as e:
         raise RuntimeError(f"invalid model output format: {e}") from e
 
+    sections = _repair_and_restrict_calls(sections, resolved_modules)
     sections = ensure_required_calls(sections, control, resolved_modules)
     sections = sanitize_sections(sections, control, resolved_modules)
 

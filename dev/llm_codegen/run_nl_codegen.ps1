@@ -8,6 +8,7 @@ param(
   [string]$Out = "dev/llm_codegen/output/generated_ctl_main_from_nl.c",
   [string]$Raw = "dev/llm_codegen/output/generated_raw_from_nl.json",
   [string]$PromptOut = "dev/llm_codegen/output/generated_prompt_from_nl.txt",
+  [int]$MaxPipelineAttempts = 5,
   [string]$Model = ""
 )
 
@@ -24,27 +25,47 @@ if (-not $apiKeyFromConfig -and -not $env:SILICONFLOW_API_KEY -and -not $env:OPE
 
 $modelToUse = if ($Model) { $Model } else { "$($llmCfg.model)" }
 
-python "dev/llm_codegen/nl_instruction_to_control.py" `
-  --instruction $Instruction `
-  --kb $Kb `
-  --llm-config $LlmConfig `
-  --out $ControlOut `
-  --raw $ControlRaw `
-  --prompt-out $ControlPromptOut `
-  --model $modelToUse
-if ($LASTEXITCODE -ne 0) {
-  throw "Stage-1 failed: nl_instruction_to_control.py exited with code $LASTEXITCODE"
+if ($llmCfg.max_pipeline_attempts -and $MaxPipelineAttempts -eq 5) {
+  $MaxPipelineAttempts = [int]$llmCfg.max_pipeline_attempts
 }
 
-python "dev/llm_codegen/siliconflow_codegen_client.py" `
-  --control $ControlOut `
-  --kb $Kb `
-  --llm-config $LlmConfig `
-  --out $Out `
-  --raw $Raw `
-  --prompt-out $PromptOut `
-  --render-profile ctl_main `
-  --model $modelToUse
-if ($LASTEXITCODE -ne 0) {
-  throw "Stage-2 failed: siliconflow_codegen_client.py exited with code $LASTEXITCODE"
+for ($attempt = 1; $attempt -le $MaxPipelineAttempts; $attempt++) {
+  Write-Host "[PIPELINE] Attempt $attempt/$MaxPipelineAttempts"
+
+  python "dev/llm_codegen/nl_instruction_to_control.py" `
+    --instruction $Instruction `
+    --kb $Kb `
+    --llm-config $LlmConfig `
+    --out $ControlOut `
+    --raw $ControlRaw `
+    --prompt-out $ControlPromptOut `
+    --model $modelToUse
+
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Stage-1 failed on attempt $attempt (exit=$LASTEXITCODE)."
+    if ($attempt -eq $MaxPipelineAttempts) {
+      throw "Stage-1 failed after $MaxPipelineAttempts attempts"
+    }
+    continue
+  }
+
+  python "dev/llm_codegen/siliconflow_codegen_client.py" `
+    --control $ControlOut `
+    --kb $Kb `
+    --llm-config $LlmConfig `
+    --out $Out `
+    --raw $Raw `
+    --prompt-out $PromptOut `
+    --render-profile ctl_main `
+    --model $modelToUse
+
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "[PIPELINE] Success on attempt $attempt"
+    break
+  }
+
+  Write-Warning "Stage-2 failed on attempt $attempt (exit=$LASTEXITCODE). Regenerating from stage-1..."
+  if ($attempt -eq $MaxPipelineAttempts) {
+    throw "Stage-2 failed after $MaxPipelineAttempts attempts"
+  }
 }

@@ -1,30 +1,30 @@
 {
-  "id": "019d6a8d594941714f5a17a3a0640e6a",
+  "id": "019d6b8f80dc73741fb765c950e6b6d7",
   "object": "chat.completion",
-  "created": 1775609141,
+  "created": 1775626060,
   "model": "deepseek-ai/DeepSeek-V3.2",
   "choices": [
     {
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "{\n  \"project\": {\n    \"name\": \"PMSM_Speed_Control\",\n    \"target\": \"GMP_CTL\",\n    \"notes\": \"永磁同步电机速度控制程序\"\n  },\n  \"modules\": [\n    {\n      \"instance_name\": \"pmsm_motor_params\",\n      \"canonical_id\": \"PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t\"\n    },\n    {\n      \"instance_name\": \"inverter_hal\",\n      \"canonical_id\": \"hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301\"\n    },\n    {\n      \"instance_name\": \"adc_channel_ia\",\n      \"canonical_id\": \"ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel\"\n    },\n    {\n      \"instance_name\": \"adc_channel_ib\",\n      \"canonical_id\": \"ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel\"\n    },\n    {\n      \"instance_name\": \"encoder\",\n      \"canonical_id\": \"MC_ENCODER__motor_control_interface_encoder\"\n    },\n    {\n      \"instance_name\": \"pwm_modulator\",\n      \"canonical_id\": \"CTL_TP_MODULATION_API__interface_spwm_modulator\"\n    },\n    {\n      \"instance_name\": \"current_controller\",\n      \"canonical_id\": \"CURRENT_CONTROLLER__motor_control_current_loop_foc_core\"\n    },\n    {\n      \"instance_name\": \"speed_controller\",\n      \"canonical_id\": \"MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl\"\n    },\n    {\n      \"instance_name\": \"motor_protection\",\n      \"canonical_id\": \"AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection\"\n    },\n    {\n      \"instance_name\": \"trip_protector\",\n      \"canonical_id\": \"trip_protector__intrinsic_protection_itoc_protection\"\n    }\n  ],\n  \"links\": [\n    {\n      \"from\": \"adc_channel_ia\",\n      \"to\": \"current_controller\",\n      \"signal\": \"ia_measured\"\n    },\n    {\n      \"from\": \"adc_channel_ib\",\n      \"to\": \"current_controller\",\n      \"signal\": \"ib_measured\"\n    },\n    {\n      \"from\": \"encoder\",\n      \"to\": \"current_controller\",\n      \"signal\": \"theta_mech\"\n    },\n    {\n      \"from\": \"encoder\",\n      \"to\": \"speed_controller\",\n      \"signal\": \"speed_feedback\"\n    },\n    {\n      \"from\": \"speed_controller\",\n      \"to\": \"current_controller\",\n      \"signal\": \"iq_reference\"\n    },\n    {\n      \"from\": \"current_controller\",\n      \"to\": \"pwm_modulator\",\n      \"signal\": \"v_alpha_beta\"\n    },\n    {\n      \"from\": \"motor_protection\",\n      \"to\": \"current_controller\",\n      \"signal\": \"fault_status\"\n    },\n    {\n      \"from\": \"trip_protector\",\n      \"to\": \"motor_protection\",\n      \"signal\": \"trip_signal\"\n    }\n  ],\n  \"schedule\": {\n    \"init\": [\"pmsm_motor_params\", \"inverter_hal\", \"adc_channel_ia\", \"adc_channel_ib\", \"encoder\", \"pwm_modulator\"],\n    \"fast_loop\": [\"current_controller\", \"speed_controller\", \"motor_protection\"],\n    \"slow_loop\": [],\n    \"fault\": [\"trip_protector\"]\n  }\n}"
+        "content": "```json\n{\n    \"project\": {\n        \"name\": \"PMSM_Speed_Control\",\n        \"target\": \"GMP_CTL\",\n        \"notes\": \"永磁同步电机速度控制程序\"\n    },\n    \"modules\": [\n        {\n            \"instance_name\": \"motor_params\",\n            \"canonical_id\": \"PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t\"\n        },\n        {\n            \"instance_name\": \"inverter_hal\",\n            \"canonical_id\": \"hal_boostxl_drv8301__hardware_preset_inverter_3ph_ti_boostxl_drv8301\"\n        },\n        {\n            \"instance_name\": \"adc_channel\",\n            \"canonical_id\": \"ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel\"\n        },\n        {\n            \"instance_name\": \"pwm_channel\",\n            \"canonical_id\": \"PWM_CHANNEL_SINGLE__interface_pwm_channel\"\n        },\n        {\n            \"instance_name\": \"encoder\",\n            \"canonical_id\": \"MC_ENCODER__motor_control_interface_encoder\"\n        },\n        {\n            \"instance_name\": \"speed_controller\",\n            \"canonical_id\": \"MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl\"\n        },\n        {\n            \"instance_name\": \"current_controller\",\n            \"canonical_id\": \"CURRENT_CONTROLLER__motor_control_current_loop_foc_core\"\n        },\n        {\n            \"instance_name\": \"modulator\",\n            \"canonical_id\": \"CTL_TP_MODULATION_API__interface_spwm_modulator\"\n        },\n        {\n            \"instance_name\": \"motor_protection\",\n            \"canonical_id\": \"AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection\"\n        },\n        {\n            \"instance_name\": \"trip_protector\",\n            \"canonical_id\": \"trip_protector__intrinsic_protection_itoc_protection\"\n        },\n        {\n            \"instance_name\": \"mc_lib\",\n            \"canonical_id\": \"CTL_MC_LIB__motor_control\"\n        },\n        {\n            \"instance_name\": \"intrinsic_lib\",\n            \"canonical_id\": \"CTL_INTRINSIC_LIB__intrinsic\"\n        }\n    ],\n    \"links\": [\n        {\n            \"from\": \"adc_channel\",\n            \"to\": \"current_controller\",\n            \"signal\": \"phase_currents\"\n        },\n        {\n            \"from\": \"encoder\",\n            \"to\": \"speed_controller\",\n            \"signal\": \"speed_feedback\"\n        },\n        {\n            \"from\": \"speed_controller\",\n            \"to\": \"current_controller\",\n            \"signal\": \"current_reference\"\n        },\n        {\n            \"from\": \"current_controller\",\n            \"to\": \"modulator\",\n            \"signal\": \"modulation_signals\"\n        },\n        {\n            \"from\": \"modulator\",\n            \"to\": \"pwm_channel\",\n            \"signal\": \"pwm_duty_cycles\"\n        },\n        {\n            \"from\": \"adc_channel\",\n            \"to\": \"motor_protection\",\n            \"signal\": \"current_monitoring\"\n        },\n        {\n            \"from\": \"motor_protection\",\n            \"to\": \"trip_protector\",\n            \"signal\": \"fault_status\"\n        },\n        {\n            \"from\": \"trip_protector\",\n            \"to\": \"pwm_channel\",\n            \"signal\": \"pwm_disable\"\n        }\n    ],\n    \"schedule\": {\n        \"init\": [\"motor_params\", \"inverter_hal\", \"pwm_channel\", \"modulator\", \"encoder\"],\n        \"fast_loop\": [\"adc_channel\", \"speed_controller\", \"current_controller\", \"motor_protection\"],\n        \"slow_loop\": [],\n        \"fault\": [\"trip_protector\"]\n    }\n}\n```"
       },
       "finish_reason": "stop"
     }
   ],
   "usage": {
-    "prompt_tokens": 18135,
-    "completion_tokens": 853,
-    "total_tokens": 18988,
+    "prompt_tokens": 18186,
+    "completion_tokens": 903,
+    "total_tokens": 19089,
     "completion_tokens_details": {
       "reasoning_tokens": 0
     },
     "prompt_tokens_details": {
-      "cached_tokens": 0
+      "cached_tokens": 18048
     },
-    "prompt_cache_hit_tokens": 0,
-    "prompt_cache_miss_tokens": 18135
+    "prompt_cache_hit_tokens": 18048,
+    "prompt_cache_miss_tokens": 138
   },
   "system_fingerprint": ""
 }

@@ -1335,3 +1335,6 @@ Controller design KB candidates (JSON):
 
 Output JSON template:
 {"project":{"name":"...","target":"GMP_CTL","notes":"..."},"modules":[],"links":[],"schedule":{"init":[],"fast_loop":[],"slow_loop":[],"fault":[]}}
+
+Previous validation failure to fix in this retry:
+non-runnable loop module in control structure: fast_loop:pwm_channel (PWM_CHANNEL_SINGLE__interface_pwm_channel) does not provide a single-pointer step signature

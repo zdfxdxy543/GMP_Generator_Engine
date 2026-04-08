@@ -6,6 +6,7 @@
   "timeout": 180,
   "max_kb_items": 120,
   "max_control_structure_attempts": 5,
+  "max_pipeline_attempts": 5,
   "system_prompts": {
     "control_structure": "You are an expert control-system architecture assistant. Given a natural-language target and a controller design knowledge base, generate only strict control-structure JSON without markdown or prose.",
     "codegen": "You are an expert embedded control code generator. Generate deterministic C function-body logic only, no declarations or definitions. Return strict JSON only. Never output markdown fences or explanatory text."
