@@ -1,0 +1,141 @@
+{
+  "id": "speed_control_system_001",
+  "name": "Speed Control System",
+  "version": 1,
+  "language": "en",
+  "requirement": "I need to design a speed control system",
+  "summary": "A single-loop speed controller with reference input, feedback, and output to plant",
+  "control_scope": "controller_body_only",
+  "blocks": [
+    {
+      "id": "block_speed_ref",
+      "type": "reference",
+      "name": "Speed Reference",
+      "function": "Provides the target speed setpoint",
+      "parameters": {},
+      "ports": [
+        "port_speed_ref_out"
+      ]
+    },
+    {
+      "id": "block_speed_fb",
+      "type": "feedback",
+      "name": "Speed Feedback",
+      "function": "Measures actual speed from the plant",
+      "parameters": {},
+      "ports": [
+        "port_speed_fb_out"
+      ]
+    },
+    {
+      "id": "block_speed_sum",
+      "type": "summation",
+      "name": "Speed Error Calculator",
+      "function": "Computes error between reference and feedback",
+      "parameters": {
+        "operation": "subtraction"
+      },
+      "ports": [
+        "port_speed_sum_in1",
+        "port_speed_sum_in2",
+        "port_speed_sum_out"
+      ]
+    },
+    {
+      "id": "block_speed_pid",
+      "type": "controller",
+      "name": "Speed PID Controller",
+      "function": "PID control algorithm for speed regulation",
+      "parameters": {
+        "Kp": 1.0,
+        "Ki": 0.1,
+        "Kd": 0.01
+      },
+      "ports": [
+        "port_speed_pid_in",
+        "port_speed_pid_out"
+      ]
+    },
+    {
+      "id": "block_output",
+      "type": "output",
+      "name": "Control Output",
+      "function": "Output signal to the plant (e.g., torque or voltage command)",
+      "parameters": {},
+      "ports": [
+        "port_output_in",
+        "port_output_out"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_ref_to_sum",
+      "from_block": "block_speed_ref",
+      "from_port": "port_speed_ref_out",
+      "to_block": "block_speed_sum",
+      "to_port": "port_speed_sum_in1",
+      "signal": "speed_reference"
+    },
+    {
+      "id": "edge_fb_to_sum",
+      "from_block": "block_speed_fb",
+      "from_port": "port_speed_fb_out",
+      "to_block": "block_speed_sum",
+      "to_port": "port_speed_sum_in2",
+      "signal": "speed_feedback"
+    },
+    {
+      "id": "edge_sum_to_pid",
+      "from_block": "block_speed_sum",
+      "from_port": "port_speed_sum_out",
+      "to_block": "block_speed_pid",
+      "to_port": "port_speed_pid_in",
+      "signal": "speed_error"
+    },
+    {
+      "id": "edge_pid_to_output",
+      "from_block": "block_speed_pid",
+      "from_port": "port_speed_pid_out",
+      "to_block": "block_output",
+      "to_port": "port_output_in",
+      "signal": "control_signal"
+    }
+  ],
+  "layout": {
+    "block_positions": {
+      "block_speed_ref": {
+        "x": 50,
+        "y": 150
+      },
+      "block_speed_fb": {
+        "x": 50,
+        "y": 250
+      },
+      "block_speed_sum": {
+        "x": 200,
+        "y": 200
+      },
+      "block_speed_pid": {
+        "x": 350,
+        "y": 200
+      },
+      "block_output": {
+        "x": 500,
+        "y": 200
+      }
+    },
+    "signal_flow": "left_to_right"
+  },
+  "design_rules": [
+    "Single-loop speed control only (no cascaded inner loops implied by requirement)",
+    "Controller outputs generic control signal (torque/voltage unspecified)",
+    "No protection or modulation blocks included per constraints",
+    "Minimal structure inferred from requirement"
+  ],
+  "output_format": {
+    "control_signal_type": "generic",
+    "hierarchy_levels": 1,
+    "loop_type": "speed"
+  }
+}

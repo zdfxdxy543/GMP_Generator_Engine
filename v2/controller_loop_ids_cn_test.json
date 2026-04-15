@@ -1,0 +1,14 @@
+{
+  "requirement": "Design a vacuum cleaner motor controller",
+  "language": "en",
+  "selected_loops": [
+    {
+      "id": "loop_speed_001",
+      "name": "speed_loop"
+    },
+    {
+      "id": "loop_current_001",
+      "name": "current_loop"
+    }
+  ]
+}

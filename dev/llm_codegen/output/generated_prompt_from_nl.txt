@@ -16,13 +16,13 @@ Required content:
 Resolved modules JSON:
 [
   {
-    "instance_name": "buck_ctrl",
+    "instance_name": "pmsm_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "buck_controller_api__digital_power_dcdc_buck",
-    "module_id": "buck_controller_api",
-    "module_name": "Buck Converter Controller API",
-    "file": "ctl/component/digital_power/dcdc/buck.h",
+    "canonical_id": "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl",
+    "module_id": "MC_PMSM_SENSORED_CONTROLLER",
+    "module_name": "Sensored PMSM FOC Controller",
+    "file": "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -34,52 +34,48 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_buck_ctrl",
-          "signature": "ctl_step_buck_ctrl(buck_ctrl_t* buck)",
+          "function": "ctl_step_pmsm_ctrl",
+          "signature": "ctl_step_pmsm_ctrl(pmsm_controller_t* ctrl)",
           "direct_inputs": []
         }
       ],
       "attach": [
         {
-          "function": "ctl_attach_buck_ctrl_input",
-          "signature": "ctl_attach_buck_ctrl_input(buck_ctrl_t* buck, adc_ift* uo, adc_ift* il, adc_ift* uin)"
+          "function": "ctl_attach_pmsm_output",
+          "signature": "ctl_attach_pmsm_output(pmsm_controller_t* ctrl, tri_pwm_ift* pwm_out)"
         }
       ],
       "io": {
         "inferred_inputs": [
           {
-            "field": "adc_ui",
-            "desc": "ADC interface for input voltage."
-          },
-          {
-            "field": "lpf_ui",
-            "desc": "Low-pass filter for the input voltage measurement."
-          },
-          {
-            "field": "modulation_saturation",
-            "desc": "Saturation block to limit the input voltage value."
-          },
-          {
-            "field": "ui_sat",
-            "desc": "Saturated input voltage value."
+            "field": "mtr_interface",
+            "desc": "@brief Universal motor input interface (ADC, encoder, etc.)."
           }
         ],
         "inferred_outputs": [
           {
-            "field": "adc_uo",
-            "desc": "ADC interface for output capacitor voltage."
+            "field": "pwm_out",
+            "desc": "@brief Three-phase PWM output interface."
           },
           {
-            "field": "voltage_pid",
-            "desc": "Outer PID controller for the output voltage loop."
+            "field": "flag_enable_output",
+            "desc": "@brief PWM output enable flag."
           },
           {
-            "field": "lpf_uo",
-            "desc": "Low-pass filter for the output voltage measurement."
+            "field": "voltage_limit_max",
+            "desc": "@brief Current loop output saturation upper limit (Vdq voltage in p.u.)."
           },
           {
-            "field": "voltage_ff",
-            "desc": "Feed-forward term for the voltage loop (output of current PID)."
+            "field": "voltage_limit_min",
+            "desc": "@brief Current loop output saturation lower limit (Vdq voltage in p.u.)."
+          },
+          {
+            "field": "current_limit_max",
+            "desc": "@brief Velocity loop output saturation upper limit (Iq current in p.u.)."
+          },
+          {
+            "field": "current_limit_min",
+            "desc": "@brief Velocity loop output saturation lower limit (Iq current in p.u.)."
           }
         ]
       },
@@ -87,13 +83,92 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "adc_channel",
+    "instance_name": "mech_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
-    "module_id": "ADC_PTR_SINGLE_CHANNEL",
-    "module_name": "Single ADC Channel (Pointer based)",
-    "file": "ctl/component/interface/adc_ptr_channel.h",
+    "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
+    "module_id": "MECHANICAL_CONTROLLER",
+    "module_name": "Mechanical Loop Controller (PU System)",
+    "file": "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mech_ctrl",
+          "signature": "ctl_step_mech_ctrl(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_mech_ctrl_pip",
+          "signature": "ctl_step_mech_ctrl_pip(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mech_ctrl",
+          "signature": "ctl_attach_mech_ctrl(ctl_mech_ctrl_t* ctrl, rotation_ift* pos_if, velocity_ift* spd_if)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "mtr_protect",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION",
+    "module_name": "mtr_protection",
+    "file": "ctl/component/motor_control/basic/mtr_protection.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fault"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mtr_protect_fast",
+          "signature": "ctl_step_mtr_protect_fast(ctl_mtr_protect_t* prot)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_protect_port",
+          "signature": "ctl_attach_mtr_protect_port(ctl_mtr_protect_t* prot, ctrl_gt* u_dc, ctl_vector2_t* i_meas, ctl_vector2_t* i_ref,\r\n                                 adc_ift* mtr_temp, adc_ift* inv_temp)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "encoder",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "MC_ENCODER__motor_control_interface_encoder",
+    "module_id": "MC_ENCODER",
+    "module_name": "Encoder Interface",
+    "file": "ctl/component/motor_control/interface/encoder.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -105,53 +180,113 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_ptr_adc_channel",
-          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_pos_encoder",
+          "signature": "ctl_step_pos_encoder(pos_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
         },
         {
-          "function": "ctl_step_dual_ptr_adc_channel",
-          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_multiturn_pos_encoder",
+          "signature": "ctl_step_multiturn_pos_encoder(pos_multiturn_encoder_t* enc, uint32_t raw,\r\n                                                         int32_t revolutions)",
+          "direct_inputs": [
+            "uint32_t raw",
+            "int32_t revolutions"
+          ]
         },
         {
-          "function": "ctl_step_tri_ptr_adc_channel",
-          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "function": "ctl_step_autoturn_pos_encoder",
+          "signature": "ctl_step_autoturn_pos_encoder(pos_autoturn_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
+        },
+        {
+          "function": "ctl_step_spd_calc",
+          "signature": "ctl_step_spd_calc(spd_calculator_t* sc)",
           "direct_inputs": []
         }
       ],
       "attach": [],
       "io": {
-        "inferred_inputs": [
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
-          }
-        ],
+        "inferred_inputs": [],
         "inferred_outputs": [
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The dual ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The triple ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard velocity interface for output."
           }
         ]
       },
       "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "motor_params",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t",
+    "module_id": "PMSM_GBM2804H_PARAMETERS",
+    "module_name": "Motor Parameters (GBM2804H-100T)",
+    "file": "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "low"
+    }
+  },
+  {
+    "instance_name": "std_interface",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
+    "module_id": "STD_INTERFACE",
+    "module_name": "Standard Controller Interface",
+    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": [
+          {
+            "field": "enable",
+            "desc": "Controller enable status output."
+          }
+        ]
+      },
+      "confidence": "low"
     }
   },
   {
@@ -263,152 +398,13 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "protection",
+    "instance_name": "adc_channel",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy",
-    "module_id": "protection_strategy_api",
-    "module_name": "DC/DC Protection Strategy API",
-    "file": "ctl/component/digital_power/basic/protectoion_strategy.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fast_loop"
-      },
-      "step": [
-        {
-          "function": "ctl_step_vip_protection",
-          "signature": "ctl_step_vip_protection(std_vip_protection_t* obj)",
-          "direct_inputs": []
-        },
-        {
-          "function": "ctl_step_foldback_protection",
-          "signature": "ctl_step_foldback_protection(std_foldback_protection_t* obj)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [
-        {
-          "function": "ctl_attach_vip_protection",
-          "signature": "ctl_attach_vip_protection(std_vip_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        },
-        {
-          "function": "ctl_attach_foldback_protection",
-          "signature": "ctl_attach_foldback_protection(std_foldback_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        }
-      ],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": [
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "voltage_max",
-            "desc": "Maximum permissible output voltage."
-          },
-          {
-            "field": "current_max",
-            "desc": "Maximum permissible output current."
-          },
-          {
-            "field": "power_max",
-            "desc": "Maximum permissible output power."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          },
-          {
-            "field": "pout",
-            "desc": "Calculated and filtered output power."
-          },
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "current_limit_output",
-            "desc": "Calculated dynamic current limit. This is the main output."
-          },
-          {
-            "field": "voltage_rated",
-            "desc": "Normal operating output voltage, where foldback starts."
-          },
-          {
-            "field": "current_short_circuit",
-            "desc": "Current limit when the output is fully shorted (Vout -> 0)."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          }
-        ]
-      },
-      "confidence": "high"
-    }
-  },
-  {
-    "instance_name": "trip_protector",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "trip_protector__intrinsic_protection_itoc_protection",
-    "module_id": "trip_protector",
-    "module_name": "Three-Stage Trip Protector",
-    "file": "ctl/component/intrinsic/protection/itoc_protection.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fault"
-      },
-      "step": [
-        {
-          "function": "ctl_step_trip_protector",
-          "signature": "ctl_step_trip_protector(ctl_trip_protector_t* prot)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": []
-      },
-      "confidence": "medium"
-    }
-  },
-  {
-    "instance_name": "std_interface",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
-    "module_id": "STD_INTERFACE",
-    "module_name": "Standard Controller Interface",
-    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "file": "ctl/component/interface/adc_ptr_channel.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -418,28 +414,65 @@ Resolved modules JSON:
         ],
         "schedule_hint": "init"
       },
-      "step": [],
+      "step": [
+        {
+          "function": "ctl_step_ptr_adc_channel",
+          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_dual_ptr_adc_channel",
+          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_tri_ptr_adc_channel",
+          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        }
+      ],
       "attach": [],
       "io": {
-        "inferred_inputs": [],
+        "inferred_inputs": [
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
+          }
+        ],
         "inferred_outputs": [
           {
-            "field": "enable",
-            "desc": "Controller enable status output."
+            "field": "control_port",
+            "desc": "OUTPUT: The ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The dual ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The triple ADC data output interface."
           }
         ]
       },
-      "confidence": "low"
+      "confidence": "medium"
     }
   },
   {
-    "instance_name": "dp_lib",
+    "instance_name": "mc_lib",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "CTL_DP_LIB__digital_power",
-    "module_id": "CTL_DP_LIB",
-    "module_name": "Digital Power Control Library",
-    "file": "ctl/component/digital_power.h",
+    "canonical_id": "CTL_MC_LIB__motor_control",
+    "module_id": "CTL_MC_LIB",
+    "module_name": "Motor Control Library",
+    "file": "ctl/component/motor_control.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -489,58 +522,124 @@ Resolved modules JSON:
 Schedule JSON:
 {
   "init": [
+    "motor_params",
     "std_interface",
+    "encoder",
     "adc_channel",
-    "pwm_channel"
+    "pwm_channel",
+    "mc_lib",
+    "intrinsic_lib"
   ],
   "fast_loop": [
-    "buck_ctrl",
-    "protection"
+    "pmsm_ctrl",
+    "mech_ctrl",
+    "mtr_protect"
   ],
   "slow_loop": [],
   "fault": [
-    "trip_protector"
+    "mtr_protect"
   ]
 }
 
 Links JSON:
 [
   {
-    "from": "adc_channel",
-    "to": "buck_ctrl",
-    "signal": "voltage_feedback"
+    "from": "std_interface",
+    "to": "pmsm_ctrl",
+    "signal": "command_signals"
   },
   {
-    "from": "buck_ctrl",
+    "from": "encoder",
+    "to": "pmsm_ctrl",
+    "signal": "position_feedback"
+  },
+  {
+    "from": "adc_channel",
+    "to": "pmsm_ctrl",
+    "signal": "current_feedback"
+  },
+  {
+    "from": "mech_ctrl",
+    "to": "pmsm_ctrl",
+    "signal": "current_reference"
+  },
+  {
+    "from": "pmsm_ctrl",
     "to": "pwm_channel",
     "signal": "pwm_duty"
   },
   {
-    "from": "adc_channel",
-    "to": "protection",
-    "signal": "voltage_monitor"
+    "from": "motor_params",
+    "to": "pmsm_ctrl",
+    "signal": "motor_parameters"
   },
   {
-    "from": "protection",
-    "to": "trip_protector",
-    "signal": "fault_status"
+    "from": "pmsm_ctrl",
+    "to": "mtr_protect",
+    "signal": "protection_signals"
   },
   {
-    "from": "trip_protector",
-    "to": "buck_ctrl",
+    "from": "mtr_protect",
+    "to": "pwm_channel",
     "signal": "protection_override"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "voltage_reference"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "control_parameters"
   }
 ]
+
+Generation experience guidance:
+# Generation Experience Guide
+
+## Purpose
+- This file is manually maintained by developers.
+- The code generator reads this file and uses it as extra guidance when generating source files.
+
+## High Priority Rules
+- Put only rules that must be followed in every generation.
+- Keep each rule short and testable.
+
+- Rule: <one sentence>
+- Rule: <one sentence>
+- Rule: <one sentence>
+
+## Naming Conventions
+- Instance naming pattern: <example>
+- Function naming pattern: <example>
+- File naming constraints: <example>
+
+## Required Initialization Patterns
+- Pattern: <what must be initialized first>
+- Pattern: <required attach order>
+- Pattern: <required safety checks>
+
+## Dispatch and Scheduling Patterns
+- fast_loop: <required calls and order>
+- slow_loop: <required calls and order>
+- fault path: <required behavior>
+
+## Tunable Parameter Rules
+- Where tunables must be stored: <struct name/path>
+- How to apply tunables: <hook/function>
+- Runtime update constraints: <validation/defaulting>
+
+## Forbidden Patterns
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+
+## Recovery and Fallback
+- If API signature is ambiguous: <preferred strategy>
+- If module type cannot be inferred: <preferred strategy>
+- If generated code conflicts with framework style: <preferred strategy>
+
+## Verification Checklist
+- [ ] All required global objects are declared and defined.
+- [ ] Initialization order follows required patterns.
+- [ ] Dispatch contains required loop paths.
+- [ ] No placeholder/unresolved APIs are emitted.
+- [ ] Generated code is compile-oriented and framework-aligned.
+
+## Notes
+- Add concrete examples when possible.
+- Remove outdated rules to avoid polluting prompts.
 
 
 ===== PROMPT ctl_main.c =====
@@ -563,22 +662,27 @@ Reference from previously generated ctl_main.h:
 #ifndef CTL_MAIN_H
 #define CTL_MAIN_H
 
-#include "ctl/component/digital_power/dcdc/buck.h"
-#include "ctl/component/interface/adc_ptr_channel.h"
-#include "ctl/component/interface/pwm_channel.h"
-#include "ctl/component/digital_power/basic/protectoion_strategy.h"
-#include "ctl/component/intrinsic/protection/itoc_protection.h"
+#include "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h"
+#include "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h"
+#include "ctl/component/motor_control/basic/mtr_protection.h"
+#include "ctl/component/motor_control/interface/encoder.h"
+#include "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h"
 #include "ctl/component/interface/gmp_standard_interface.h"
-#include "ctl/component/digital_power.h"
+#include "ctl/component/interface/pwm_channel.h"
+#include "ctl/component/interface/adc_ptr_channel.h"
+#include "ctl/component/motor_control.h"
 #include "ctl/component/intrinsic.h"
 
-extern buck_ctrl_t buck_ctrl;
+/* Controller global instances */
+extern pmsm_controller_t pmsm_ctrl;
+extern ctl_mech_ctrl_t mech_ctrl;
+extern ctl_mtr_protect_t mtr_protect;
+extern pos_encoder_t encoder;
 extern ptr_adc_channel_t adc_channel;
-extern pwm_channel_t pwm_channel;
-extern std_vip_protection_t protection;
-extern ctl_trip_protector_t trip_protector;
-extern std_interface_t std_interface;
+extern pwm_tri_channel_t pwm_channel;
+extern ctl_std_interface_t std_interface;
 
+/* Function prototypes */
 void ctl_init(void);
 void ctl_mainloop(void);
 void clear_all_controllers(void);
@@ -586,15 +690,12 @@ void tsk_protect(void);
 void ctl_enable_pwm(void);
 void ctl_disable_pwm(void);
 
+/* Inline dispatch function */
 static inline void ctl_dispatch_fast_loop(void)
 {
-    ctl_step_buck_ctrl(&buck_ctrl);
-    ctl_step_vip_protection(&protection);
-}
-
-static inline void ctl_dispatch_fault(void)
-{
-    ctl_step_trip_protector(&trip_protector);
+    ctl_step_mech_ctrl(&mech_ctrl);
+    ctl_step_pmsm_ctrl(&pmsm_ctrl);
+    ctl_step_mtr_protect_fast(&mtr_protect);
 }
 
 #endif /* CTL_MAIN_H */
@@ -603,13 +704,13 @@ static inline void ctl_dispatch_fault(void)
 Resolved modules JSON:
 [
   {
-    "instance_name": "buck_ctrl",
+    "instance_name": "pmsm_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "buck_controller_api__digital_power_dcdc_buck",
-    "module_id": "buck_controller_api",
-    "module_name": "Buck Converter Controller API",
-    "file": "ctl/component/digital_power/dcdc/buck.h",
+    "canonical_id": "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl",
+    "module_id": "MC_PMSM_SENSORED_CONTROLLER",
+    "module_name": "Sensored PMSM FOC Controller",
+    "file": "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -621,52 +722,48 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_buck_ctrl",
-          "signature": "ctl_step_buck_ctrl(buck_ctrl_t* buck)",
+          "function": "ctl_step_pmsm_ctrl",
+          "signature": "ctl_step_pmsm_ctrl(pmsm_controller_t* ctrl)",
           "direct_inputs": []
         }
       ],
       "attach": [
         {
-          "function": "ctl_attach_buck_ctrl_input",
-          "signature": "ctl_attach_buck_ctrl_input(buck_ctrl_t* buck, adc_ift* uo, adc_ift* il, adc_ift* uin)"
+          "function": "ctl_attach_pmsm_output",
+          "signature": "ctl_attach_pmsm_output(pmsm_controller_t* ctrl, tri_pwm_ift* pwm_out)"
         }
       ],
       "io": {
         "inferred_inputs": [
           {
-            "field": "adc_ui",
-            "desc": "ADC interface for input voltage."
-          },
-          {
-            "field": "lpf_ui",
-            "desc": "Low-pass filter for the input voltage measurement."
-          },
-          {
-            "field": "modulation_saturation",
-            "desc": "Saturation block to limit the input voltage value."
-          },
-          {
-            "field": "ui_sat",
-            "desc": "Saturated input voltage value."
+            "field": "mtr_interface",
+            "desc": "@brief Universal motor input interface (ADC, encoder, etc.)."
           }
         ],
         "inferred_outputs": [
           {
-            "field": "adc_uo",
-            "desc": "ADC interface for output capacitor voltage."
+            "field": "pwm_out",
+            "desc": "@brief Three-phase PWM output interface."
           },
           {
-            "field": "voltage_pid",
-            "desc": "Outer PID controller for the output voltage loop."
+            "field": "flag_enable_output",
+            "desc": "@brief PWM output enable flag."
           },
           {
-            "field": "lpf_uo",
-            "desc": "Low-pass filter for the output voltage measurement."
+            "field": "voltage_limit_max",
+            "desc": "@brief Current loop output saturation upper limit (Vdq voltage in p.u.)."
           },
           {
-            "field": "voltage_ff",
-            "desc": "Feed-forward term for the voltage loop (output of current PID)."
+            "field": "voltage_limit_min",
+            "desc": "@brief Current loop output saturation lower limit (Vdq voltage in p.u.)."
+          },
+          {
+            "field": "current_limit_max",
+            "desc": "@brief Velocity loop output saturation upper limit (Iq current in p.u.)."
+          },
+          {
+            "field": "current_limit_min",
+            "desc": "@brief Velocity loop output saturation lower limit (Iq current in p.u.)."
           }
         ]
       },
@@ -674,13 +771,92 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "adc_channel",
+    "instance_name": "mech_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
-    "module_id": "ADC_PTR_SINGLE_CHANNEL",
-    "module_name": "Single ADC Channel (Pointer based)",
-    "file": "ctl/component/interface/adc_ptr_channel.h",
+    "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
+    "module_id": "MECHANICAL_CONTROLLER",
+    "module_name": "Mechanical Loop Controller (PU System)",
+    "file": "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mech_ctrl",
+          "signature": "ctl_step_mech_ctrl(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_mech_ctrl_pip",
+          "signature": "ctl_step_mech_ctrl_pip(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mech_ctrl",
+          "signature": "ctl_attach_mech_ctrl(ctl_mech_ctrl_t* ctrl, rotation_ift* pos_if, velocity_ift* spd_if)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "mtr_protect",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION",
+    "module_name": "mtr_protection",
+    "file": "ctl/component/motor_control/basic/mtr_protection.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fault"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mtr_protect_fast",
+          "signature": "ctl_step_mtr_protect_fast(ctl_mtr_protect_t* prot)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_protect_port",
+          "signature": "ctl_attach_mtr_protect_port(ctl_mtr_protect_t* prot, ctrl_gt* u_dc, ctl_vector2_t* i_meas, ctl_vector2_t* i_ref,\r\n                                 adc_ift* mtr_temp, adc_ift* inv_temp)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "encoder",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "MC_ENCODER__motor_control_interface_encoder",
+    "module_id": "MC_ENCODER",
+    "module_name": "Encoder Interface",
+    "file": "ctl/component/motor_control/interface/encoder.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -692,53 +868,113 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_ptr_adc_channel",
-          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_pos_encoder",
+          "signature": "ctl_step_pos_encoder(pos_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
         },
         {
-          "function": "ctl_step_dual_ptr_adc_channel",
-          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_multiturn_pos_encoder",
+          "signature": "ctl_step_multiturn_pos_encoder(pos_multiturn_encoder_t* enc, uint32_t raw,\r\n                                                         int32_t revolutions)",
+          "direct_inputs": [
+            "uint32_t raw",
+            "int32_t revolutions"
+          ]
         },
         {
-          "function": "ctl_step_tri_ptr_adc_channel",
-          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "function": "ctl_step_autoturn_pos_encoder",
+          "signature": "ctl_step_autoturn_pos_encoder(pos_autoturn_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
+        },
+        {
+          "function": "ctl_step_spd_calc",
+          "signature": "ctl_step_spd_calc(spd_calculator_t* sc)",
           "direct_inputs": []
         }
       ],
       "attach": [],
       "io": {
-        "inferred_inputs": [
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
-          }
-        ],
+        "inferred_inputs": [],
         "inferred_outputs": [
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The dual ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The triple ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard velocity interface for output."
           }
         ]
       },
       "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "motor_params",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t",
+    "module_id": "PMSM_GBM2804H_PARAMETERS",
+    "module_name": "Motor Parameters (GBM2804H-100T)",
+    "file": "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "low"
+    }
+  },
+  {
+    "instance_name": "std_interface",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
+    "module_id": "STD_INTERFACE",
+    "module_name": "Standard Controller Interface",
+    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": [
+          {
+            "field": "enable",
+            "desc": "Controller enable status output."
+          }
+        ]
+      },
+      "confidence": "low"
     }
   },
   {
@@ -850,152 +1086,13 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "protection",
+    "instance_name": "adc_channel",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy",
-    "module_id": "protection_strategy_api",
-    "module_name": "DC/DC Protection Strategy API",
-    "file": "ctl/component/digital_power/basic/protectoion_strategy.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fast_loop"
-      },
-      "step": [
-        {
-          "function": "ctl_step_vip_protection",
-          "signature": "ctl_step_vip_protection(std_vip_protection_t* obj)",
-          "direct_inputs": []
-        },
-        {
-          "function": "ctl_step_foldback_protection",
-          "signature": "ctl_step_foldback_protection(std_foldback_protection_t* obj)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [
-        {
-          "function": "ctl_attach_vip_protection",
-          "signature": "ctl_attach_vip_protection(std_vip_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        },
-        {
-          "function": "ctl_attach_foldback_protection",
-          "signature": "ctl_attach_foldback_protection(std_foldback_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        }
-      ],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": [
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "voltage_max",
-            "desc": "Maximum permissible output voltage."
-          },
-          {
-            "field": "current_max",
-            "desc": "Maximum permissible output current."
-          },
-          {
-            "field": "power_max",
-            "desc": "Maximum permissible output power."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          },
-          {
-            "field": "pout",
-            "desc": "Calculated and filtered output power."
-          },
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "current_limit_output",
-            "desc": "Calculated dynamic current limit. This is the main output."
-          },
-          {
-            "field": "voltage_rated",
-            "desc": "Normal operating output voltage, where foldback starts."
-          },
-          {
-            "field": "current_short_circuit",
-            "desc": "Current limit when the output is fully shorted (Vout -> 0)."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          }
-        ]
-      },
-      "confidence": "high"
-    }
-  },
-  {
-    "instance_name": "trip_protector",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "trip_protector__intrinsic_protection_itoc_protection",
-    "module_id": "trip_protector",
-    "module_name": "Three-Stage Trip Protector",
-    "file": "ctl/component/intrinsic/protection/itoc_protection.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fault"
-      },
-      "step": [
-        {
-          "function": "ctl_step_trip_protector",
-          "signature": "ctl_step_trip_protector(ctl_trip_protector_t* prot)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": []
-      },
-      "confidence": "medium"
-    }
-  },
-  {
-    "instance_name": "std_interface",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
-    "module_id": "STD_INTERFACE",
-    "module_name": "Standard Controller Interface",
-    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "file": "ctl/component/interface/adc_ptr_channel.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1005,28 +1102,65 @@ Resolved modules JSON:
         ],
         "schedule_hint": "init"
       },
-      "step": [],
+      "step": [
+        {
+          "function": "ctl_step_ptr_adc_channel",
+          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_dual_ptr_adc_channel",
+          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_tri_ptr_adc_channel",
+          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        }
+      ],
       "attach": [],
       "io": {
-        "inferred_inputs": [],
+        "inferred_inputs": [
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
+          }
+        ],
         "inferred_outputs": [
           {
-            "field": "enable",
-            "desc": "Controller enable status output."
+            "field": "control_port",
+            "desc": "OUTPUT: The ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The dual ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The triple ADC data output interface."
           }
         ]
       },
-      "confidence": "low"
+      "confidence": "medium"
     }
   },
   {
-    "instance_name": "dp_lib",
+    "instance_name": "mc_lib",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "CTL_DP_LIB__digital_power",
-    "module_id": "CTL_DP_LIB",
-    "module_name": "Digital Power Control Library",
-    "file": "ctl/component/digital_power.h",
+    "canonical_id": "CTL_MC_LIB__motor_control",
+    "module_id": "CTL_MC_LIB",
+    "module_name": "Motor Control Library",
+    "file": "ctl/component/motor_control.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1076,58 +1210,124 @@ Resolved modules JSON:
 Schedule JSON:
 {
   "init": [
+    "motor_params",
     "std_interface",
+    "encoder",
     "adc_channel",
-    "pwm_channel"
+    "pwm_channel",
+    "mc_lib",
+    "intrinsic_lib"
   ],
   "fast_loop": [
-    "buck_ctrl",
-    "protection"
+    "pmsm_ctrl",
+    "mech_ctrl",
+    "mtr_protect"
   ],
   "slow_loop": [],
   "fault": [
-    "trip_protector"
+    "mtr_protect"
   ]
 }
 
 Links JSON:
 [
   {
-    "from": "adc_channel",
-    "to": "buck_ctrl",
-    "signal": "voltage_feedback"
+    "from": "std_interface",
+    "to": "pmsm_ctrl",
+    "signal": "command_signals"
   },
   {
-    "from": "buck_ctrl",
+    "from": "encoder",
+    "to": "pmsm_ctrl",
+    "signal": "position_feedback"
+  },
+  {
+    "from": "adc_channel",
+    "to": "pmsm_ctrl",
+    "signal": "current_feedback"
+  },
+  {
+    "from": "mech_ctrl",
+    "to": "pmsm_ctrl",
+    "signal": "current_reference"
+  },
+  {
+    "from": "pmsm_ctrl",
     "to": "pwm_channel",
     "signal": "pwm_duty"
   },
   {
-    "from": "adc_channel",
-    "to": "protection",
-    "signal": "voltage_monitor"
+    "from": "motor_params",
+    "to": "pmsm_ctrl",
+    "signal": "motor_parameters"
   },
   {
-    "from": "protection",
-    "to": "trip_protector",
-    "signal": "fault_status"
+    "from": "pmsm_ctrl",
+    "to": "mtr_protect",
+    "signal": "protection_signals"
   },
   {
-    "from": "trip_protector",
-    "to": "buck_ctrl",
+    "from": "mtr_protect",
+    "to": "pwm_channel",
     "signal": "protection_override"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "voltage_reference"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "control_parameters"
   }
 ]
+
+Generation experience guidance:
+# Generation Experience Guide
+
+## Purpose
+- This file is manually maintained by developers.
+- The code generator reads this file and uses it as extra guidance when generating source files.
+
+## High Priority Rules
+- Put only rules that must be followed in every generation.
+- Keep each rule short and testable.
+
+- Rule: <one sentence>
+- Rule: <one sentence>
+- Rule: <one sentence>
+
+## Naming Conventions
+- Instance naming pattern: <example>
+- Function naming pattern: <example>
+- File naming constraints: <example>
+
+## Required Initialization Patterns
+- Pattern: <what must be initialized first>
+- Pattern: <required attach order>
+- Pattern: <required safety checks>
+
+## Dispatch and Scheduling Patterns
+- fast_loop: <required calls and order>
+- slow_loop: <required calls and order>
+- fault path: <required behavior>
+
+## Tunable Parameter Rules
+- Where tunables must be stored: <struct name/path>
+- How to apply tunables: <hook/function>
+- Runtime update constraints: <validation/defaulting>
+
+## Forbidden Patterns
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+
+## Recovery and Fallback
+- If API signature is ambiguous: <preferred strategy>
+- If module type cannot be inferred: <preferred strategy>
+- If generated code conflicts with framework style: <preferred strategy>
+
+## Verification Checklist
+- [ ] All required global objects are declared and defined.
+- [ ] Initialization order follows required patterns.
+- [ ] Dispatch contains required loop paths.
+- [ ] No placeholder/unresolved APIs are emitted.
+- [ ] Generated code is compile-oriented and framework-aligned.
+
+## Notes
+- Add concrete examples when possible.
+- Remove outdated rules to avoid polluting prompts.
 
 
 ===== PROMPT user_main.h =====
@@ -1148,13 +1348,13 @@ Required content:
 Resolved modules JSON:
 [
   {
-    "instance_name": "buck_ctrl",
+    "instance_name": "pmsm_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "buck_controller_api__digital_power_dcdc_buck",
-    "module_id": "buck_controller_api",
-    "module_name": "Buck Converter Controller API",
-    "file": "ctl/component/digital_power/dcdc/buck.h",
+    "canonical_id": "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl",
+    "module_id": "MC_PMSM_SENSORED_CONTROLLER",
+    "module_name": "Sensored PMSM FOC Controller",
+    "file": "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1166,52 +1366,48 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_buck_ctrl",
-          "signature": "ctl_step_buck_ctrl(buck_ctrl_t* buck)",
+          "function": "ctl_step_pmsm_ctrl",
+          "signature": "ctl_step_pmsm_ctrl(pmsm_controller_t* ctrl)",
           "direct_inputs": []
         }
       ],
       "attach": [
         {
-          "function": "ctl_attach_buck_ctrl_input",
-          "signature": "ctl_attach_buck_ctrl_input(buck_ctrl_t* buck, adc_ift* uo, adc_ift* il, adc_ift* uin)"
+          "function": "ctl_attach_pmsm_output",
+          "signature": "ctl_attach_pmsm_output(pmsm_controller_t* ctrl, tri_pwm_ift* pwm_out)"
         }
       ],
       "io": {
         "inferred_inputs": [
           {
-            "field": "adc_ui",
-            "desc": "ADC interface for input voltage."
-          },
-          {
-            "field": "lpf_ui",
-            "desc": "Low-pass filter for the input voltage measurement."
-          },
-          {
-            "field": "modulation_saturation",
-            "desc": "Saturation block to limit the input voltage value."
-          },
-          {
-            "field": "ui_sat",
-            "desc": "Saturated input voltage value."
+            "field": "mtr_interface",
+            "desc": "@brief Universal motor input interface (ADC, encoder, etc.)."
           }
         ],
         "inferred_outputs": [
           {
-            "field": "adc_uo",
-            "desc": "ADC interface for output capacitor voltage."
+            "field": "pwm_out",
+            "desc": "@brief Three-phase PWM output interface."
           },
           {
-            "field": "voltage_pid",
-            "desc": "Outer PID controller for the output voltage loop."
+            "field": "flag_enable_output",
+            "desc": "@brief PWM output enable flag."
           },
           {
-            "field": "lpf_uo",
-            "desc": "Low-pass filter for the output voltage measurement."
+            "field": "voltage_limit_max",
+            "desc": "@brief Current loop output saturation upper limit (Vdq voltage in p.u.)."
           },
           {
-            "field": "voltage_ff",
-            "desc": "Feed-forward term for the voltage loop (output of current PID)."
+            "field": "voltage_limit_min",
+            "desc": "@brief Current loop output saturation lower limit (Vdq voltage in p.u.)."
+          },
+          {
+            "field": "current_limit_max",
+            "desc": "@brief Velocity loop output saturation upper limit (Iq current in p.u.)."
+          },
+          {
+            "field": "current_limit_min",
+            "desc": "@brief Velocity loop output saturation lower limit (Iq current in p.u.)."
           }
         ]
       },
@@ -1219,13 +1415,92 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "adc_channel",
+    "instance_name": "mech_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
-    "module_id": "ADC_PTR_SINGLE_CHANNEL",
-    "module_name": "Single ADC Channel (Pointer based)",
-    "file": "ctl/component/interface/adc_ptr_channel.h",
+    "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
+    "module_id": "MECHANICAL_CONTROLLER",
+    "module_name": "Mechanical Loop Controller (PU System)",
+    "file": "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mech_ctrl",
+          "signature": "ctl_step_mech_ctrl(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_mech_ctrl_pip",
+          "signature": "ctl_step_mech_ctrl_pip(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mech_ctrl",
+          "signature": "ctl_attach_mech_ctrl(ctl_mech_ctrl_t* ctrl, rotation_ift* pos_if, velocity_ift* spd_if)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "mtr_protect",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION",
+    "module_name": "mtr_protection",
+    "file": "ctl/component/motor_control/basic/mtr_protection.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fault"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mtr_protect_fast",
+          "signature": "ctl_step_mtr_protect_fast(ctl_mtr_protect_t* prot)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_protect_port",
+          "signature": "ctl_attach_mtr_protect_port(ctl_mtr_protect_t* prot, ctrl_gt* u_dc, ctl_vector2_t* i_meas, ctl_vector2_t* i_ref,\r\n                                 adc_ift* mtr_temp, adc_ift* inv_temp)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "encoder",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "MC_ENCODER__motor_control_interface_encoder",
+    "module_id": "MC_ENCODER",
+    "module_name": "Encoder Interface",
+    "file": "ctl/component/motor_control/interface/encoder.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1237,53 +1512,113 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_ptr_adc_channel",
-          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_pos_encoder",
+          "signature": "ctl_step_pos_encoder(pos_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
         },
         {
-          "function": "ctl_step_dual_ptr_adc_channel",
-          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_multiturn_pos_encoder",
+          "signature": "ctl_step_multiturn_pos_encoder(pos_multiturn_encoder_t* enc, uint32_t raw,\r\n                                                         int32_t revolutions)",
+          "direct_inputs": [
+            "uint32_t raw",
+            "int32_t revolutions"
+          ]
         },
         {
-          "function": "ctl_step_tri_ptr_adc_channel",
-          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "function": "ctl_step_autoturn_pos_encoder",
+          "signature": "ctl_step_autoturn_pos_encoder(pos_autoturn_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
+        },
+        {
+          "function": "ctl_step_spd_calc",
+          "signature": "ctl_step_spd_calc(spd_calculator_t* sc)",
           "direct_inputs": []
         }
       ],
       "attach": [],
       "io": {
-        "inferred_inputs": [
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
-          }
-        ],
+        "inferred_inputs": [],
         "inferred_outputs": [
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The dual ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The triple ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard velocity interface for output."
           }
         ]
       },
       "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "motor_params",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t",
+    "module_id": "PMSM_GBM2804H_PARAMETERS",
+    "module_name": "Motor Parameters (GBM2804H-100T)",
+    "file": "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "low"
+    }
+  },
+  {
+    "instance_name": "std_interface",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
+    "module_id": "STD_INTERFACE",
+    "module_name": "Standard Controller Interface",
+    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": [
+          {
+            "field": "enable",
+            "desc": "Controller enable status output."
+          }
+        ]
+      },
+      "confidence": "low"
     }
   },
   {
@@ -1395,152 +1730,13 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "protection",
+    "instance_name": "adc_channel",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy",
-    "module_id": "protection_strategy_api",
-    "module_name": "DC/DC Protection Strategy API",
-    "file": "ctl/component/digital_power/basic/protectoion_strategy.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fast_loop"
-      },
-      "step": [
-        {
-          "function": "ctl_step_vip_protection",
-          "signature": "ctl_step_vip_protection(std_vip_protection_t* obj)",
-          "direct_inputs": []
-        },
-        {
-          "function": "ctl_step_foldback_protection",
-          "signature": "ctl_step_foldback_protection(std_foldback_protection_t* obj)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [
-        {
-          "function": "ctl_attach_vip_protection",
-          "signature": "ctl_attach_vip_protection(std_vip_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        },
-        {
-          "function": "ctl_attach_foldback_protection",
-          "signature": "ctl_attach_foldback_protection(std_foldback_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        }
-      ],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": [
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "voltage_max",
-            "desc": "Maximum permissible output voltage."
-          },
-          {
-            "field": "current_max",
-            "desc": "Maximum permissible output current."
-          },
-          {
-            "field": "power_max",
-            "desc": "Maximum permissible output power."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          },
-          {
-            "field": "pout",
-            "desc": "Calculated and filtered output power."
-          },
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "current_limit_output",
-            "desc": "Calculated dynamic current limit. This is the main output."
-          },
-          {
-            "field": "voltage_rated",
-            "desc": "Normal operating output voltage, where foldback starts."
-          },
-          {
-            "field": "current_short_circuit",
-            "desc": "Current limit when the output is fully shorted (Vout -> 0)."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          }
-        ]
-      },
-      "confidence": "high"
-    }
-  },
-  {
-    "instance_name": "trip_protector",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "trip_protector__intrinsic_protection_itoc_protection",
-    "module_id": "trip_protector",
-    "module_name": "Three-Stage Trip Protector",
-    "file": "ctl/component/intrinsic/protection/itoc_protection.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fault"
-      },
-      "step": [
-        {
-          "function": "ctl_step_trip_protector",
-          "signature": "ctl_step_trip_protector(ctl_trip_protector_t* prot)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": []
-      },
-      "confidence": "medium"
-    }
-  },
-  {
-    "instance_name": "std_interface",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
-    "module_id": "STD_INTERFACE",
-    "module_name": "Standard Controller Interface",
-    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "file": "ctl/component/interface/adc_ptr_channel.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1550,28 +1746,65 @@ Resolved modules JSON:
         ],
         "schedule_hint": "init"
       },
-      "step": [],
+      "step": [
+        {
+          "function": "ctl_step_ptr_adc_channel",
+          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_dual_ptr_adc_channel",
+          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_tri_ptr_adc_channel",
+          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        }
+      ],
       "attach": [],
       "io": {
-        "inferred_inputs": [],
+        "inferred_inputs": [
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
+          }
+        ],
         "inferred_outputs": [
           {
-            "field": "enable",
-            "desc": "Controller enable status output."
+            "field": "control_port",
+            "desc": "OUTPUT: The ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The dual ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The triple ADC data output interface."
           }
         ]
       },
-      "confidence": "low"
+      "confidence": "medium"
     }
   },
   {
-    "instance_name": "dp_lib",
+    "instance_name": "mc_lib",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "CTL_DP_LIB__digital_power",
-    "module_id": "CTL_DP_LIB",
-    "module_name": "Digital Power Control Library",
-    "file": "ctl/component/digital_power.h",
+    "canonical_id": "CTL_MC_LIB__motor_control",
+    "module_id": "CTL_MC_LIB",
+    "module_name": "Motor Control Library",
+    "file": "ctl/component/motor_control.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1621,61 +1854,127 @@ Resolved modules JSON:
 Schedule JSON:
 {
   "init": [
+    "motor_params",
     "std_interface",
+    "encoder",
     "adc_channel",
-    "pwm_channel"
+    "pwm_channel",
+    "mc_lib",
+    "intrinsic_lib"
   ],
   "fast_loop": [
-    "buck_ctrl",
-    "protection"
+    "pmsm_ctrl",
+    "mech_ctrl",
+    "mtr_protect"
   ],
   "slow_loop": [],
   "fault": [
-    "trip_protector"
+    "mtr_protect"
   ]
 }
 
 Links JSON:
 [
   {
-    "from": "adc_channel",
-    "to": "buck_ctrl",
-    "signal": "voltage_feedback"
+    "from": "std_interface",
+    "to": "pmsm_ctrl",
+    "signal": "command_signals"
   },
   {
-    "from": "buck_ctrl",
+    "from": "encoder",
+    "to": "pmsm_ctrl",
+    "signal": "position_feedback"
+  },
+  {
+    "from": "adc_channel",
+    "to": "pmsm_ctrl",
+    "signal": "current_feedback"
+  },
+  {
+    "from": "mech_ctrl",
+    "to": "pmsm_ctrl",
+    "signal": "current_reference"
+  },
+  {
+    "from": "pmsm_ctrl",
     "to": "pwm_channel",
     "signal": "pwm_duty"
   },
   {
-    "from": "adc_channel",
-    "to": "protection",
-    "signal": "voltage_monitor"
+    "from": "motor_params",
+    "to": "pmsm_ctrl",
+    "signal": "motor_parameters"
   },
   {
-    "from": "protection",
-    "to": "trip_protector",
-    "signal": "fault_status"
+    "from": "pmsm_ctrl",
+    "to": "mtr_protect",
+    "signal": "protection_signals"
   },
   {
-    "from": "trip_protector",
-    "to": "buck_ctrl",
+    "from": "mtr_protect",
+    "to": "pwm_channel",
     "signal": "protection_override"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "voltage_reference"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "control_parameters"
   }
 ]
 
 Previous validation failure to fix in this retry:
 missing required pattern in user_main.h: \binit\s*\(
+
+Generation experience guidance:
+# Generation Experience Guide
+
+## Purpose
+- This file is manually maintained by developers.
+- The code generator reads this file and uses it as extra guidance when generating source files.
+
+## High Priority Rules
+- Put only rules that must be followed in every generation.
+- Keep each rule short and testable.
+
+- Rule: <one sentence>
+- Rule: <one sentence>
+- Rule: <one sentence>
+
+## Naming Conventions
+- Instance naming pattern: <example>
+- Function naming pattern: <example>
+- File naming constraints: <example>
+
+## Required Initialization Patterns
+- Pattern: <what must be initialized first>
+- Pattern: <required attach order>
+- Pattern: <required safety checks>
+
+## Dispatch and Scheduling Patterns
+- fast_loop: <required calls and order>
+- slow_loop: <required calls and order>
+- fault path: <required behavior>
+
+## Tunable Parameter Rules
+- Where tunables must be stored: <struct name/path>
+- How to apply tunables: <hook/function>
+- Runtime update constraints: <validation/defaulting>
+
+## Forbidden Patterns
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+
+## Recovery and Fallback
+- If API signature is ambiguous: <preferred strategy>
+- If module type cannot be inferred: <preferred strategy>
+- If generated code conflicts with framework style: <preferred strategy>
+
+## Verification Checklist
+- [ ] All required global objects are declared and defined.
+- [ ] Initialization order follows required patterns.
+- [ ] Dispatch contains required loop paths.
+- [ ] No placeholder/unresolved APIs are emitted.
+- [ ] Generated code is compile-oriented and framework-aligned.
+
+## Notes
+- Add concrete examples when possible.
+- Remove outdated rules to avoid polluting prompts.
 
 
 ===== PROMPT user_main.c =====
@@ -1699,22 +1998,27 @@ Reference from previously generated user_main.h:
 
 #include "ctl/scheduler.h"
 #include "ctl/at_core.h"
-#include "ctl/component/digital_power/dcdc/buck.h"
-#include "ctl/component/interface/adc_ptr_channel.h"
-#include "ctl/component/interface/pwm_channel.h"
-#include "ctl/component/digital_power/basic/protectoion_strategy.h"
-#include "ctl/component/intrinsic/protection/itoc_protection.h"
+#include "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h"
+#include "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h"
+#include "ctl/component/motor_control/basic/mtr_protection.h"
+#include "ctl/component/motor_control/interface/encoder.h"
+#include "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h"
 #include "ctl/component/interface/gmp_standard_interface.h"
-#include "ctl/component/digital_power.h"
+#include "ctl/component/interface/pwm_channel.h"
+#include "ctl/component/interface/adc_ptr_channel.h"
+#include "ctl/component/motor_control.h"
 #include "ctl/component/intrinsic.h"
 
-extern buck_ctrl_t buck_ctrl;
+/* Global object declarations */
+extern pmsm_controller_t pmsm_ctrl;
+extern ctl_mech_ctrl_t mech_ctrl;
+extern ctl_mtr_protect_t mtr_protect;
+extern pos_encoder_t encoder;
 extern ptr_adc_channel_t adc_channel;
-extern pwm_channel_t pwm_channel;
-extern std_vip_protection_t protection;
-extern ctl_trip_protector_t trip_protector;
-extern std_interface_t std_interface;
+extern pwm_tri_channel_t pwm_channel;
+extern ctl_std_interface_t std_interface;
 
+/* Function prototypes */
 void init(void);
 void mainloop(void);
 void setup_peripheral(void);
@@ -1728,22 +2032,27 @@ Reference from previously generated ctl_main.h:
 #ifndef CTL_MAIN_H
 #define CTL_MAIN_H
 
-#include "ctl/component/digital_power/dcdc/buck.h"
-#include "ctl/component/interface/adc_ptr_channel.h"
-#include "ctl/component/interface/pwm_channel.h"
-#include "ctl/component/digital_power/basic/protectoion_strategy.h"
-#include "ctl/component/intrinsic/protection/itoc_protection.h"
+#include "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h"
+#include "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h"
+#include "ctl/component/motor_control/basic/mtr_protection.h"
+#include "ctl/component/motor_control/interface/encoder.h"
+#include "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h"
 #include "ctl/component/interface/gmp_standard_interface.h"
-#include "ctl/component/digital_power.h"
+#include "ctl/component/interface/pwm_channel.h"
+#include "ctl/component/interface/adc_ptr_channel.h"
+#include "ctl/component/motor_control.h"
 #include "ctl/component/intrinsic.h"
 
-extern buck_ctrl_t buck_ctrl;
+/* Controller global instances */
+extern pmsm_controller_t pmsm_ctrl;
+extern ctl_mech_ctrl_t mech_ctrl;
+extern ctl_mtr_protect_t mtr_protect;
+extern pos_encoder_t encoder;
 extern ptr_adc_channel_t adc_channel;
-extern pwm_channel_t pwm_channel;
-extern std_vip_protection_t protection;
-extern ctl_trip_protector_t trip_protector;
-extern std_interface_t std_interface;
+extern pwm_tri_channel_t pwm_channel;
+extern ctl_std_interface_t std_interface;
 
+/* Function prototypes */
 void ctl_init(void);
 void ctl_mainloop(void);
 void clear_all_controllers(void);
@@ -1751,15 +2060,12 @@ void tsk_protect(void);
 void ctl_enable_pwm(void);
 void ctl_disable_pwm(void);
 
+/* Inline dispatch function */
 static inline void ctl_dispatch_fast_loop(void)
 {
-    ctl_step_buck_ctrl(&buck_ctrl);
-    ctl_step_vip_protection(&protection);
-}
-
-static inline void ctl_dispatch_fault(void)
-{
-    ctl_step_trip_protector(&trip_protector);
+    ctl_step_mech_ctrl(&mech_ctrl);
+    ctl_step_pmsm_ctrl(&pmsm_ctrl);
+    ctl_step_mtr_protect_fast(&mtr_protect);
 }
 
 #endif /* CTL_MAIN_H */
@@ -1768,13 +2074,13 @@ static inline void ctl_dispatch_fault(void)
 Resolved modules JSON:
 [
   {
-    "instance_name": "buck_ctrl",
+    "instance_name": "pmsm_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "buck_controller_api__digital_power_dcdc_buck",
-    "module_id": "buck_controller_api",
-    "module_name": "Buck Converter Controller API",
-    "file": "ctl/component/digital_power/dcdc/buck.h",
+    "canonical_id": "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl",
+    "module_id": "MC_PMSM_SENSORED_CONTROLLER",
+    "module_name": "Sensored PMSM FOC Controller",
+    "file": "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1786,52 +2092,48 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_buck_ctrl",
-          "signature": "ctl_step_buck_ctrl(buck_ctrl_t* buck)",
+          "function": "ctl_step_pmsm_ctrl",
+          "signature": "ctl_step_pmsm_ctrl(pmsm_controller_t* ctrl)",
           "direct_inputs": []
         }
       ],
       "attach": [
         {
-          "function": "ctl_attach_buck_ctrl_input",
-          "signature": "ctl_attach_buck_ctrl_input(buck_ctrl_t* buck, adc_ift* uo, adc_ift* il, adc_ift* uin)"
+          "function": "ctl_attach_pmsm_output",
+          "signature": "ctl_attach_pmsm_output(pmsm_controller_t* ctrl, tri_pwm_ift* pwm_out)"
         }
       ],
       "io": {
         "inferred_inputs": [
           {
-            "field": "adc_ui",
-            "desc": "ADC interface for input voltage."
-          },
-          {
-            "field": "lpf_ui",
-            "desc": "Low-pass filter for the input voltage measurement."
-          },
-          {
-            "field": "modulation_saturation",
-            "desc": "Saturation block to limit the input voltage value."
-          },
-          {
-            "field": "ui_sat",
-            "desc": "Saturated input voltage value."
+            "field": "mtr_interface",
+            "desc": "@brief Universal motor input interface (ADC, encoder, etc.)."
           }
         ],
         "inferred_outputs": [
           {
-            "field": "adc_uo",
-            "desc": "ADC interface for output capacitor voltage."
+            "field": "pwm_out",
+            "desc": "@brief Three-phase PWM output interface."
           },
           {
-            "field": "voltage_pid",
-            "desc": "Outer PID controller for the output voltage loop."
+            "field": "flag_enable_output",
+            "desc": "@brief PWM output enable flag."
           },
           {
-            "field": "lpf_uo",
-            "desc": "Low-pass filter for the output voltage measurement."
+            "field": "voltage_limit_max",
+            "desc": "@brief Current loop output saturation upper limit (Vdq voltage in p.u.)."
           },
           {
-            "field": "voltage_ff",
-            "desc": "Feed-forward term for the voltage loop (output of current PID)."
+            "field": "voltage_limit_min",
+            "desc": "@brief Current loop output saturation lower limit (Vdq voltage in p.u.)."
+          },
+          {
+            "field": "current_limit_max",
+            "desc": "@brief Velocity loop output saturation upper limit (Iq current in p.u.)."
+          },
+          {
+            "field": "current_limit_min",
+            "desc": "@brief Velocity loop output saturation lower limit (Iq current in p.u.)."
           }
         ]
       },
@@ -1839,13 +2141,92 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "adc_channel",
+    "instance_name": "mech_ctrl",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
-    "module_id": "ADC_PTR_SINGLE_CHANNEL",
-    "module_name": "Single ADC Channel (Pointer based)",
-    "file": "ctl/component/interface/adc_ptr_channel.h",
+    "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl",
+    "module_id": "MECHANICAL_CONTROLLER",
+    "module_name": "Mechanical Loop Controller (PU System)",
+    "file": "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fast_loop"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mech_ctrl",
+          "signature": "ctl_step_mech_ctrl(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_mech_ctrl_pip",
+          "signature": "ctl_step_mech_ctrl_pip(ctl_mech_ctrl_t* ctrl)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mech_ctrl",
+          "signature": "ctl_attach_mech_ctrl(ctl_mech_ctrl_t* ctrl, rotation_ift* pos_if, velocity_ift* spd_if)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "mtr_protect",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection",
+    "module_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION",
+    "module_name": "mtr_protection",
+    "file": "ctl/component/motor_control/basic/mtr_protection.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "fault"
+      },
+      "step": [
+        {
+          "function": "ctl_step_mtr_protect_fast",
+          "signature": "ctl_step_mtr_protect_fast(ctl_mtr_protect_t* prot)",
+          "direct_inputs": []
+        }
+      ],
+      "attach": [
+        {
+          "function": "ctl_attach_mtr_protect_port",
+          "signature": "ctl_attach_mtr_protect_port(ctl_mtr_protect_t* prot, ctrl_gt* u_dc, ctl_vector2_t* i_meas, ctl_vector2_t* i_ref,\r\n                                 adc_ift* mtr_temp, adc_ift* inv_temp)"
+        }
+      ],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "high"
+    }
+  },
+  {
+    "instance_name": "encoder",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "MC_ENCODER__motor_control_interface_encoder",
+    "module_id": "MC_ENCODER",
+    "module_name": "Encoder Interface",
+    "file": "ctl/component/motor_control/interface/encoder.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -1857,53 +2238,113 @@ Resolved modules JSON:
       },
       "step": [
         {
-          "function": "ctl_step_ptr_adc_channel",
-          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_pos_encoder",
+          "signature": "ctl_step_pos_encoder(pos_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
         },
         {
-          "function": "ctl_step_dual_ptr_adc_channel",
-          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
-          "direct_inputs": []
+          "function": "ctl_step_multiturn_pos_encoder",
+          "signature": "ctl_step_multiturn_pos_encoder(pos_multiturn_encoder_t* enc, uint32_t raw,\r\n                                                         int32_t revolutions)",
+          "direct_inputs": [
+            "uint32_t raw",
+            "int32_t revolutions"
+          ]
         },
         {
-          "function": "ctl_step_tri_ptr_adc_channel",
-          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "function": "ctl_step_autoturn_pos_encoder",
+          "signature": "ctl_step_autoturn_pos_encoder(pos_autoturn_encoder_t* enc, uint32_t raw)",
+          "direct_inputs": [
+            "uint32_t raw"
+          ]
+        },
+        {
+          "function": "ctl_step_spd_calc",
+          "signature": "ctl_step_spd_calc(spd_calculator_t* sc)",
           "direct_inputs": []
         }
       ],
       "attach": [],
       "io": {
-        "inferred_inputs": [
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
-          },
-          {
-            "field": "raw",
-            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
-          }
-        ],
+        "inferred_inputs": [],
         "inferred_outputs": [
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The dual ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
           },
           {
-            "field": "control_port",
-            "desc": "OUTPUT: The triple ADC data output interface."
+            "field": "encif",
+            "desc": "@brief Standard rotation interface for output."
+          },
+          {
+            "field": "encif",
+            "desc": "@brief Standard velocity interface for output."
           }
         ]
       },
       "confidence": "medium"
+    }
+  },
+  {
+    "instance_name": "motor_params",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t",
+    "module_id": "PMSM_GBM2804H_PARAMETERS",
+    "module_name": "Motor Parameters (GBM2804H-100T)",
+    "file": "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": []
+      },
+      "confidence": "low"
+    }
+  },
+  {
+    "instance_name": "std_interface",
+    "schedule_hint": null,
+    "params": {},
+    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
+    "module_id": "STD_INTERFACE",
+    "module_name": "Standard Controller Interface",
+    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "api_contract": {
+      "lifecycle": {
+        "required_sequence": [
+          "init",
+          "attach(optional)",
+          "step"
+        ],
+        "schedule_hint": "init"
+      },
+      "step": [],
+      "attach": [],
+      "io": {
+        "inferred_inputs": [],
+        "inferred_outputs": [
+          {
+            "field": "enable",
+            "desc": "Controller enable status output."
+          }
+        ]
+      },
+      "confidence": "low"
     }
   },
   {
@@ -2015,152 +2456,13 @@ Resolved modules JSON:
     }
   },
   {
-    "instance_name": "protection",
+    "instance_name": "adc_channel",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy",
-    "module_id": "protection_strategy_api",
-    "module_name": "DC/DC Protection Strategy API",
-    "file": "ctl/component/digital_power/basic/protectoion_strategy.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fast_loop"
-      },
-      "step": [
-        {
-          "function": "ctl_step_vip_protection",
-          "signature": "ctl_step_vip_protection(std_vip_protection_t* obj)",
-          "direct_inputs": []
-        },
-        {
-          "function": "ctl_step_foldback_protection",
-          "signature": "ctl_step_foldback_protection(std_foldback_protection_t* obj)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [
-        {
-          "function": "ctl_attach_vip_protection",
-          "signature": "ctl_attach_vip_protection(std_vip_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        },
-        {
-          "function": "ctl_attach_foldback_protection",
-          "signature": "ctl_attach_foldback_protection(std_foldback_protection_t* obj, adc_ift* uo, adc_ift* io)"
-        }
-      ],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": [
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "voltage_max",
-            "desc": "Maximum permissible output voltage."
-          },
-          {
-            "field": "current_max",
-            "desc": "Maximum permissible output current."
-          },
-          {
-            "field": "power_max",
-            "desc": "Maximum permissible output power."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          },
-          {
-            "field": "pout",
-            "desc": "Calculated and filtered output power."
-          },
-          {
-            "field": "adc_uo",
-            "desc": "ADC interface for the output voltage."
-          },
-          {
-            "field": "adc_io",
-            "desc": "ADC interface for the output current."
-          },
-          {
-            "field": "current_limit_output",
-            "desc": "Calculated dynamic current limit. This is the main output."
-          },
-          {
-            "field": "voltage_rated",
-            "desc": "Normal operating output voltage, where foldback starts."
-          },
-          {
-            "field": "current_short_circuit",
-            "desc": "Current limit when the output is fully shorted (Vout -> 0)."
-          },
-          {
-            "field": "uout",
-            "desc": "Filtered output voltage."
-          },
-          {
-            "field": "iout",
-            "desc": "Filtered output current."
-          }
-        ]
-      },
-      "confidence": "high"
-    }
-  },
-  {
-    "instance_name": "trip_protector",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "trip_protector__intrinsic_protection_itoc_protection",
-    "module_id": "trip_protector",
-    "module_name": "Three-Stage Trip Protector",
-    "file": "ctl/component/intrinsic/protection/itoc_protection.h",
-    "api_contract": {
-      "lifecycle": {
-        "required_sequence": [
-          "init",
-          "attach(optional)",
-          "step"
-        ],
-        "schedule_hint": "fault"
-      },
-      "step": [
-        {
-          "function": "ctl_step_trip_protector",
-          "signature": "ctl_step_trip_protector(ctl_trip_protector_t* prot)",
-          "direct_inputs": []
-        }
-      ],
-      "attach": [],
-      "io": {
-        "inferred_inputs": [],
-        "inferred_outputs": []
-      },
-      "confidence": "medium"
-    }
-  },
-  {
-    "instance_name": "std_interface",
-    "schedule_hint": null,
-    "params": {},
-    "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface",
-    "module_id": "STD_INTERFACE",
-    "module_name": "Standard Controller Interface",
-    "file": "ctl/component/interface/gmp_standard_interface.h",
+    "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel",
+    "module_id": "ADC_PTR_SINGLE_CHANNEL",
+    "module_name": "Single ADC Channel (Pointer based)",
+    "file": "ctl/component/interface/adc_ptr_channel.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -2170,28 +2472,65 @@ Resolved modules JSON:
         ],
         "schedule_hint": "init"
       },
-      "step": [],
+      "step": [
+        {
+          "function": "ctl_step_ptr_adc_channel",
+          "signature": "ctl_step_ptr_adc_channel(ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_dual_ptr_adc_channel",
+          "signature": "ctl_step_dual_ptr_adc_channel(dual_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        },
+        {
+          "function": "ctl_step_tri_ptr_adc_channel",
+          "signature": "ctl_step_tri_ptr_adc_channel(tri_ptr_adc_channel_t* adc_obj)",
+          "direct_inputs": []
+        }
+      ],
       "attach": [],
       "io": {
-        "inferred_inputs": [],
+        "inferred_inputs": [
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to the raw data from the ADC peripheral."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (2) array of raw ADC data."
+          },
+          {
+            "field": "raw",
+            "desc": "INPUT: Pointer to a fixed-length (3) array of raw ADC data."
+          }
+        ],
         "inferred_outputs": [
           {
-            "field": "enable",
-            "desc": "Controller enable status output."
+            "field": "control_port",
+            "desc": "OUTPUT: The ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The dual ADC data output interface."
+          },
+          {
+            "field": "control_port",
+            "desc": "OUTPUT: The triple ADC data output interface."
           }
         ]
       },
-      "confidence": "low"
+      "confidence": "medium"
     }
   },
   {
-    "instance_name": "dp_lib",
+    "instance_name": "mc_lib",
     "schedule_hint": null,
     "params": {},
-    "canonical_id": "CTL_DP_LIB__digital_power",
-    "module_id": "CTL_DP_LIB",
-    "module_name": "Digital Power Control Library",
-    "file": "ctl/component/digital_power.h",
+    "canonical_id": "CTL_MC_LIB__motor_control",
+    "module_id": "CTL_MC_LIB",
+    "module_name": "Motor Control Library",
+    "file": "ctl/component/motor_control.h",
     "api_contract": {
       "lifecycle": {
         "required_sequence": [
@@ -2241,60 +2580,126 @@ Resolved modules JSON:
 Schedule JSON:
 {
   "init": [
+    "motor_params",
     "std_interface",
+    "encoder",
     "adc_channel",
-    "pwm_channel"
+    "pwm_channel",
+    "mc_lib",
+    "intrinsic_lib"
   ],
   "fast_loop": [
-    "buck_ctrl",
-    "protection"
+    "pmsm_ctrl",
+    "mech_ctrl",
+    "mtr_protect"
   ],
   "slow_loop": [],
   "fault": [
-    "trip_protector"
+    "mtr_protect"
   ]
 }
 
 Links JSON:
 [
   {
-    "from": "adc_channel",
-    "to": "buck_ctrl",
-    "signal": "voltage_feedback"
+    "from": "std_interface",
+    "to": "pmsm_ctrl",
+    "signal": "command_signals"
   },
   {
-    "from": "buck_ctrl",
+    "from": "encoder",
+    "to": "pmsm_ctrl",
+    "signal": "position_feedback"
+  },
+  {
+    "from": "adc_channel",
+    "to": "pmsm_ctrl",
+    "signal": "current_feedback"
+  },
+  {
+    "from": "mech_ctrl",
+    "to": "pmsm_ctrl",
+    "signal": "current_reference"
+  },
+  {
+    "from": "pmsm_ctrl",
     "to": "pwm_channel",
     "signal": "pwm_duty"
   },
   {
-    "from": "adc_channel",
-    "to": "protection",
-    "signal": "voltage_monitor"
+    "from": "motor_params",
+    "to": "pmsm_ctrl",
+    "signal": "motor_parameters"
   },
   {
-    "from": "protection",
-    "to": "trip_protector",
-    "signal": "fault_status"
+    "from": "pmsm_ctrl",
+    "to": "mtr_protect",
+    "signal": "protection_signals"
   },
   {
-    "from": "trip_protector",
-    "to": "buck_ctrl",
+    "from": "mtr_protect",
+    "to": "pwm_channel",
     "signal": "protection_override"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "voltage_reference"
-  },
-  {
-    "from": "std_interface",
-    "to": "buck_ctrl",
-    "signal": "control_parameters"
   }
 ]
 
 Previous validation failure to fix in this retry:
 missing required pattern in user_main.c: \bgmp_scheduler_dispatch\s*\(
+
+Generation experience guidance:
+# Generation Experience Guide
+
+## Purpose
+- This file is manually maintained by developers.
+- The code generator reads this file and uses it as extra guidance when generating source files.
+
+## High Priority Rules
+- Put only rules that must be followed in every generation.
+- Keep each rule short and testable.
+
+- Rule: <one sentence>
+- Rule: <one sentence>
+- Rule: <one sentence>
+
+## Naming Conventions
+- Instance naming pattern: <example>
+- Function naming pattern: <example>
+- File naming constraints: <example>
+
+## Required Initialization Patterns
+- Pattern: <what must be initialized first>
+- Pattern: <required attach order>
+- Pattern: <required safety checks>
+
+## Dispatch and Scheduling Patterns
+- fast_loop: <required calls and order>
+- slow_loop: <required calls and order>
+- fault path: <required behavior>
+
+## Tunable Parameter Rules
+- Where tunables must be stored: <struct name/path>
+- How to apply tunables: <hook/function>
+- Runtime update constraints: <validation/defaulting>
+
+## Forbidden Patterns
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+- Do not: <forbidden pattern>
+
+## Recovery and Fallback
+- If API signature is ambiguous: <preferred strategy>
+- If module type cannot be inferred: <preferred strategy>
+- If generated code conflicts with framework style: <preferred strategy>
+
+## Verification Checklist
+- [ ] All required global objects are declared and defined.
+- [ ] Initialization order follows required patterns.
+- [ ] Dispatch contains required loop paths.
+- [ ] No placeholder/unresolved APIs are emitted.
+- [ ] Generated code is compile-oriented and framework-aligned.
+
+## Notes
+- Add concrete examples when possible.
+- Remove outdated rules to avoid polluting prompts.
 
 

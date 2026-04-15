@@ -1,0 +1,69 @@
+{
+  "id": "arch_core_001",
+  "name": "Controller Core Structure",
+  "version": 1,
+  "language": "en",
+  "requirement": "I need to design a speed control system.",
+  "summary": "English-formatted controller-body structure with unique ids for each loop and connection.",
+  "control_scope": "controller_body_only",
+  "blocks": [
+    {
+      "id": "blk_002_speed_loop",
+      "name": "speed_loop",
+      "type": "outer_loop",
+      "role": "Outer loop that converts speed error into torque demand.",
+      "inputs": [
+        "speed_reference",
+        "speed_feedback",
+        "controller_enable"
+      ],
+      "outputs": [
+        "torque_reference"
+      ],
+      "notes": "Outer loop that converts speed error into torque demand."
+    },
+    {
+      "id": "blk_006_current_loop",
+      "name": "current_loop",
+      "type": "inner_loop",
+      "role": "Inner loop that converts current error into voltage demand.",
+      "inputs": [
+        "current_reference",
+        "current_feedback",
+        "controller_enable"
+      ],
+      "outputs": [
+        "voltage_reference"
+      ],
+      "notes": "Inner loop that converts current error into voltage demand."
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_001_speed_loop_to_current_loop",
+      "source": "speed_loop",
+      "target": "current_loop",
+      "signal": "current_reference",
+      "description": "Speed loop output becomes the current reference for the inner loop."
+    }
+  ],
+  "layout": {
+    "hierarchy": [
+      "speed_loop",
+      "current_loop"
+    ],
+    "feedback_paths": []
+  },
+  "design_rules": [
+    "All text must be written in English.",
+    "Every block and edge must have a unique and stable id.",
+    "Only controller-body loops are allowed; no protection, modulation, or state-machine blocks.",
+    "The hierarchy should reflect the requested cascade, such as position -> speed -> torque -> voltage.",
+    "Each loop should expose a clear reference input and a clear feedback input when applicable."
+  ],
+  "output_format": {
+    "block_id_prefix": "blk_",
+    "edge_id_prefix": "edge_",
+    "scope": "controller_only"
+  }
+}

@@ -1,38 +1,46 @@
 {
   "project": {
-    "name": "Buck Voltage Closed-Loop Controller",
+    "name": "PMSM_Speed_Control",
     "target": "GMP_CTL",
-    "notes": "Buck converter voltage regulation with closed-loop control",
-    "generated_at": "2026-04-08T17:21:03.228211"
+    "notes": "永磁同步电机速度控制程序",
+    "generated_at": "2026-04-14T10:48:49.675565"
   },
   "modules": [
     {
-      "instance_name": "buck_ctrl",
-      "canonical_id": "buck_controller_api__digital_power_dcdc_buck"
+      "instance_name": "pmsm_ctrl",
+      "canonical_id": "MC_PMSM_SENSORED_CONTROLLER__motor_control_suite_pmsm_pmsm_ctrl"
     },
     {
-      "instance_name": "adc_channel",
-      "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel"
+      "instance_name": "mech_ctrl",
+      "canonical_id": "MECHANICAL_CONTROLLER__motor_control_mechanical_loop_basic_mech_ctrl"
     },
     {
-      "instance_name": "pwm_channel",
-      "canonical_id": "PWM_CHANNEL_SINGLE__interface_pwm_channel"
+      "instance_name": "mtr_protect",
+      "canonical_id": "AUTO_CTL_COMPONENT_MOTOR_CONTROL_BASIC_MTR_PROTECTION__motor_control_basic_mtr_protection"
     },
     {
-      "instance_name": "protection",
-      "canonical_id": "protection_strategy_api__digital_power_basic_protectoion_strategy"
+      "instance_name": "encoder",
+      "canonical_id": "MC_ENCODER__motor_control_interface_encoder"
     },
     {
-      "instance_name": "trip_protector",
-      "canonical_id": "trip_protector__intrinsic_protection_itoc_protection"
+      "instance_name": "motor_params",
+      "canonical_id": "PMSM_GBM2804H_PARAMETERS__hardware_preset_pmsm_motor_gbm2804h_100t"
     },
     {
       "instance_name": "std_interface",
       "canonical_id": "STD_INTERFACE__interface_gmp_standard_interface"
     },
     {
-      "instance_name": "dp_lib",
-      "canonical_id": "CTL_DP_LIB__digital_power"
+      "instance_name": "pwm_channel",
+      "canonical_id": "PWM_CHANNEL_SINGLE__interface_pwm_channel"
+    },
+    {
+      "instance_name": "adc_channel",
+      "canonical_id": "ADC_PTR_SINGLE_CHANNEL__interface_adc_ptr_channel"
+    },
+    {
+      "instance_name": "mc_lib",
+      "canonical_id": "CTL_MC_LIB__motor_control"
     },
     {
       "instance_name": "intrinsic_lib",
@@ -41,54 +49,64 @@
   ],
   "links": [
     {
-      "from": "adc_channel",
-      "to": "buck_ctrl",
-      "signal": "voltage_feedback"
+      "from": "std_interface",
+      "to": "pmsm_ctrl",
+      "signal": "command_signals"
     },
     {
-      "from": "buck_ctrl",
+      "from": "encoder",
+      "to": "pmsm_ctrl",
+      "signal": "position_feedback"
+    },
+    {
+      "from": "adc_channel",
+      "to": "pmsm_ctrl",
+      "signal": "current_feedback"
+    },
+    {
+      "from": "mech_ctrl",
+      "to": "pmsm_ctrl",
+      "signal": "current_reference"
+    },
+    {
+      "from": "pmsm_ctrl",
       "to": "pwm_channel",
       "signal": "pwm_duty"
     },
     {
-      "from": "adc_channel",
-      "to": "protection",
-      "signal": "voltage_monitor"
+      "from": "motor_params",
+      "to": "pmsm_ctrl",
+      "signal": "motor_parameters"
     },
     {
-      "from": "protection",
-      "to": "trip_protector",
-      "signal": "fault_status"
+      "from": "pmsm_ctrl",
+      "to": "mtr_protect",
+      "signal": "protection_signals"
     },
     {
-      "from": "trip_protector",
-      "to": "buck_ctrl",
+      "from": "mtr_protect",
+      "to": "pwm_channel",
       "signal": "protection_override"
-    },
-    {
-      "from": "std_interface",
-      "to": "buck_ctrl",
-      "signal": "voltage_reference"
-    },
-    {
-      "from": "std_interface",
-      "to": "buck_ctrl",
-      "signal": "control_parameters"
     }
   ],
   "schedule": {
     "init": [
+      "motor_params",
       "std_interface",
+      "encoder",
       "adc_channel",
-      "pwm_channel"
+      "pwm_channel",
+      "mc_lib",
+      "intrinsic_lib"
     ],
     "fast_loop": [
-      "buck_ctrl",
-      "protection"
+      "pmsm_ctrl",
+      "mech_ctrl",
+      "mtr_protect"
     ],
     "slow_loop": [],
     "fault": [
-      "trip_protector"
+      "mtr_protect"
     ]
   }
 }
