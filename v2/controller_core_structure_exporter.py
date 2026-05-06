@@ -20,6 +20,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    import winreg
+except ImportError:  # pragma: no cover - non-Windows fallback
+    winreg = None
+
 DEFAULT_SETTINGS = {
     "api_key": "",
     "base_url": "https://api.siliconflow.cn/v1",
@@ -60,10 +65,29 @@ def read_llm_settings(path: str | Path | None = None) -> dict[str, Any]:
 
 
 def resolve_api_key(settings: dict[str, Any]) -> str:
+    def read_scope(name: str, scope: str) -> str:
+        if scope == "process":
+            return os.getenv(name, "").strip()
+
+        if winreg is None:
+            return ""
+
+        try:
+            root = winreg.HKEY_CURRENT_USER if scope == "user" else winreg.HKEY_LOCAL_MACHINE
+            subkey = r"Environment" if scope == "user" else r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+            with winreg.OpenKey(root, subkey) as key:
+                value, _ = winreg.QueryValueEx(key, name)
+                return str(value).strip()
+        except OSError:
+            return ""
+
     return (
-        str(settings.get("api_key") or "").strip()
-        or os.getenv("SILICONFLOW_API_KEY", "").strip()
-        or os.getenv("OPENAI_API_KEY", "").strip()
+        read_scope("SILICONFLOW_API_KEY", "process")
+        or read_scope("SILICONFLOW_API_KEY", "user")
+        or read_scope("SILICONFLOW_API_KEY", "machine")
+        or read_scope("OPENAI_API_KEY", "process")
+        or read_scope("OPENAI_API_KEY", "user")
+        or read_scope("OPENAI_API_KEY", "machine")
     )
 
 

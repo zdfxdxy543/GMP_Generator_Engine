@@ -286,3 +286,42 @@ fast_gt ctl_exec_adc_calibration(void)
     return 1;
 }
 
+void Setup_Motor_Current()
+{
+    mtr_ctrl_init.fs = CONTROLLER_FREQUENCY;
+    mtr_ctrl_init.v_base = CTRL_VOLTAGE_BASE;
+    mtr_ctrl_init.i_base = CTRL_CURRENT_BASE;
+
+    mtr_ctrl_init.v_bus = CTRL_VOLTAGE_BASE;
+    mtr_ctrl_init.v_phase_limit = MOTOR_PARAM_RATED_VOLTAGE;
+
+    mtr_ctrl_init.freq_base = MOTOR_PARAM_RATED_FREQUENCY;
+    mtr_ctrl_init.spd_base = MOTOR_PARAM_MAX_SPEED / 1000;
+    mtr_ctrl_init.pole_pairs = MOTOR_PARAM_POLE_PAIRS;
+
+    mtr_ctrl_init.mtr_Ld = MOTOR_PARAM_LS;
+    mtr_ctrl_init.mtr_Lq = MOTOR_PARAM_LS;
+    mtr_ctrl_init.mtr_Rs = MOTOR_PARAM_RS;
+
+    ctl_auto_tuning_mtr_current_ctrl(&mtr_ctrl_init);
+    ctl_init_mtr_current_ctrl(&mtr_ctrl, &mtr_ctrl_init);
+}
+
+void Setup_Mechanical_Controller()
+{
+    mech_init.fs = CONTROLLER_FREQUENCY;
+
+    mech_init.pos_kp = 5.0f;
+    mech_init.pos_ki = 1.0f;
+
+    mech_init.vel_kp = 5.0f;
+    mech_init.vel_ki = 1.0f;
+
+    mech_init.speed_limit = 1.0f;
+    mech_init.speed_slope_limit = 1.0f;
+    mech_init.cur_limit = 0.3f;
+
+    mech_init.mech_division = CTRL_MECH_DIV;
+
+    ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
+}

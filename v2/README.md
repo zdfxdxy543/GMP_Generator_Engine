@@ -6,8 +6,9 @@ It is independent from the rest of the repository runtime logic.
 
 Current v2 focus:
 - Convert natural-language requirements into controller loop selection.
-- Output only selected control loops and stable loop IDs.
+- Output selected control loops, stable loop IDs, and loop properties.
 - Keep output minimal JSON for downstream steps.
+- Support controller-loop styles such as position_error_loop, torque_reference_loop, speed_loop, and current_loop.
 
 ## Main Script
 - controller_loop_id_exporter.py
@@ -15,7 +16,7 @@ Current v2 focus:
 What it does:
 - Takes a natural-language requirement (Chinese or English).
 - Calls the configured LLM endpoint from llm_settings.json.
-- Returns selected loops only (for example speed_loop, current_loop).
+- Returns selected loops only, each with id, name, and properties.
 - Canonicalizes loop IDs so the same loop name always maps to the same ID.
 
 ## Minimal Call
@@ -37,12 +38,20 @@ Optional short form with explicit output file:
   "requirement": "Design a vacuum cleaner motor controller",
   "language": "en",
   "selected_loops": [
-    { "id": "loop_current_001", "name": "current_loop" },
-    { "id": "loop_speed_001", "name": "speed_loop" }
+    {
+      "id": "loop_current_001",
+      "name": "current_loop",
+      "properties": ["real_speed"]
+    },
+    {
+      "id": "loop_speed_001",
+      "name": "speed_loop",
+      "properties": ["speed"]
+    }
   ]
 }
 ```
 
 ## Notes
 - This README documents only the v2 area.
-- For successful calls, ensure api_key is available in v2/llm_settings.json or environment variables.
+- For successful calls, set SILICONFLOW_API_KEY or OPENAI_API_KEY in the environment (user or machine scope).

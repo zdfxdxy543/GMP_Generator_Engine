@@ -1,0 +1,27 @@
+{
+  "requirement": "需要设计高性能位置控制器",
+  "language": "en",
+  "selected_loops": [
+    {
+      "id": "loop_current_001",
+      "name": "current_loop",
+      "properties": [
+        "real_speed"
+      ]
+    },
+    {
+      "id": "loop_position_001",
+      "name": "position_loop",
+      "properties": [
+        "position"
+      ]
+    },
+    {
+      "id": "loop_speed_001",
+      "name": "speed_loop",
+      "properties": [
+        "speed"
+      ]
+    }
+  ]
+}
