@@ -1,0 +1,21 @@
+{
+  "requirement": "请设计适用于吸尘器的高性能控制器",
+  "language": "en",
+  "selected_loops": [
+    {
+      "id": "loop_current_001",
+      "name": "current_loop",
+      "properties": [
+        "real_speed"
+      ]
+    },
+    {
+      "id": "loop_mech_001",
+      "name": "mech_loop",
+      "properties": [
+        "speed",
+        "pid"
+      ]
+    }
+  ]
+}

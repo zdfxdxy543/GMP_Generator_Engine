@@ -1,6 +1,7 @@
 #include <gmp_core.h>
 #include <ctrl_settings.h>
 #include "ctl_main.h"
+#include "paras.generated.h"
 #include <xplt.peripheral.h>
 #include <core/pm/function_scheduler.h>
 
@@ -19,13 +20,13 @@ spwm_modulator_t spwm;
 #endif // USING_NPC_MODULATOR
 
 // controller body: Current controller, Command dispatcher, motion controller
+
 mtr_current_ctrl_t mtr_ctrl;
 mtr_current_init_t mtr_ctrl_init;
 
 // Start Define Motion Controller
-ctl_mech_ctrl_t mech_ctrl;
-ctl_mech_ctrl_init_t mech_init;
-// End Define Motion Controller
+ctl_smc_mech_ctrl_t smc_ctrl;
+ctl_smc_mech_init_t smc_init;
 
 // Observer: SMO, FO, Speed measurement.
 ctl_slope_f_pu_controller rg;
@@ -62,7 +63,7 @@ void ctl_init()
     ctl_fast_disable_output();
 
     // Start Controller Init
-
+    Setup_Mechanical_Controller();
     // End Controller Init
 
     //
@@ -108,11 +109,11 @@ void ctl_init()
     #endif // ENABLE_SMO
 
     // Start Encoder Binding
-
+    ctl_attach_mech_ctrl(&mech_ctrl, &pos_enc.encif, &spd_enc.encif);
     // End Encoder Binding
 
     // Start Enable
-
+    ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_POSITION);
     // End Enable
 
     //
@@ -325,21 +326,7 @@ void Setup_Motor_Current()
 
 void Setup_Mechanical_Controller()
 {
-    mech_init.fs = CONTROLLER_FREQUENCY;
 
-    mech_init.pos_kp = POS_KP;
-    mech_init.pos_ki = POS_KI;
-
-    mech_init.vel_kp = VEL_KP;
-    mech_init.vel_ki = VEL_KI;
-
-    mech_init.speed_limit = SPEED_LIMIT;
-    mech_init.speed_slope_limit = SPEED_SLOPE_LIMIT;
-    mech_init.cur_limit = CUR_LIMIT;
-
-    mech_init.mech_division = CTRL_MECH_DIV;
-
-    ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
 }
 
 void Setup_SMC_Mechanical_Controller()

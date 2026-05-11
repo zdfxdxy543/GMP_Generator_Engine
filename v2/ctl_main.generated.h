@@ -49,7 +49,7 @@ extern spwm_modulator_t spwm;
 extern mtr_current_ctrl_t mtr_ctrl;
 
 // Start Define Motion Controller
-extern ctl_mech_ctrl_t mech_ctrl;
+extern ctl_smc_mech_ctrl_t smc_ctrl;
 // End Define Motion Controller
 
 // Observer: SMO, FO, Speed measurement.
@@ -97,6 +97,9 @@ GMP_STATIC_INLINE void ctl_dispatch(void)
         ctl_step_spd_calc(&spd_enc);
 
         // Start Motor Control
+        ctl_step_smc_mech_ctrl(&smc_ctrl);
+
+        ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&smc_ctrl));
 
         // End Motor Control
 

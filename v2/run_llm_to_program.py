@@ -14,7 +14,7 @@ import controller_loop_id_exporter as loop_exporter
 import merge_loop_ids_into_ctl_main as merger
 
 
-def main(requirement: str, loop_ids_output: Path, c_output: Path, h_output: Path, llm_config: Path) -> int:
+def main(requirement: str, loop_ids_output: Path, c_output: Path, h_output: Path, paras_output: Path, llm_config: Path) -> int:
     print("[1/2] Generating loop-ids via LLM...")
     loop_exporter.export_json(loop_ids_output, requirement, settings_path=llm_config)
 
@@ -25,9 +25,11 @@ def main(requirement: str, loop_ids_output: Path, c_output: Path, h_output: Path
         output_path=c_output,
         header_template_path=Path(__file__).with_name("Example").joinpath("ctl_main.h"),
         header_output_path=h_output,
+        paras_template_path=Path(__file__).with_name("Example").joinpath("paras.h"),
+        paras_output_path=paras_output,
     )
 
-    print(f"Pipeline completed: {loop_ids_output}, {c_output}, {h_output}")
+    print(f"Pipeline completed: {loop_ids_output}, {c_output}, {h_output}, {paras_output}")
     return 0
 
 
@@ -37,6 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--loop-ids-output", type=Path, default=Path(__file__).with_name("controller_loop_ids_generated.json"))
     parser.add_argument("--c-output", type=Path, default=Path(__file__).with_name("ctl_main.generated.c"))
     parser.add_argument("--h-output", type=Path, default=Path(__file__).with_name("ctl_main.generated.h"))
+    parser.add_argument("--paras-output", type=Path, default=Path(__file__).with_name("paras.generated.h"))
     parser.add_argument("--llm-config", type=Path, default=Path(__file__).with_name("llm_settings.json"))
     args = parser.parse_args()
-    raise SystemExit(main(args.requirement, args.loop_ids_output, args.c_output, args.h_output, args.llm_config))
+    raise SystemExit(main(args.requirement, args.loop_ids_output, args.c_output, args.h_output, args.paras_output, args.llm_config))

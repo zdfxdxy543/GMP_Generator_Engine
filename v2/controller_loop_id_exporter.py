@@ -39,6 +39,7 @@ DEFAULT_SETTINGS = {
 
 
 CANONICAL_LOOP_IDS = {
+    "mech_loop": "loop_mech_001",
     "position_error_loop": "loop_position_error_001",
     "position_loop": "loop_position_001",
     "speed_loop": "loop_speed_001",
@@ -55,6 +56,7 @@ LOOP_ORDER_RANK = {
     "current_loop": 0,
     "voltage_loop": 1,
     "torque_loop": 2,
+    "mech_loop": 3,
     "speed_loop": 3,
     "position_loop": 4,
     "power_loop": 5,
@@ -75,6 +77,9 @@ LOOP_PROPERTY_LIBRARY = {
     "voltage_loop": ["voltage_reference"],
     "power_loop": ["power_reference"],
 }
+
+MECH_TARGETS = {"speed", "position"}
+MECH_METHODS = {"pid", "mit", "smc"}
 
 
 def default_settings_path() -> Path:
@@ -192,10 +197,11 @@ def build_user_prompt(requirement: str) -> str:
         "11) For position control scenarios, it is valid to return position_error_loop and torque_reference_loop when the requirement describes error-to-torque control.\n\n"
         "12) selected_loops must be ordered from inner loop to outer loop.\n"
         "13) properties must be a non-empty array of strings that names the key signals or variables used by that loop.\n"
-        "14) Each loop must have exactly one property, and for known loop names it must come from the designed property library.\n"
+        "14) For mech_loop (or speed/position mechanical loops that will be normalized to mech_loop), properties must contain exactly two items in order: [speed|position, pid|mit|smc].\n"
+        "15) For non-mechanical loops, each loop must have exactly one property, and for known loop names it must come from the designed property library.\n"
         f"Natural-language requirement:\n{requirement.strip()}\n\n"
         "Output JSON template:\n"
-        "{\"requirement\":\"...\",\"language\":\"en\",\"selected_loops\":[{\"id\":\"loop_current_001\",\"name\":\"current_loop\",\"properties\":[\"real_speed\"]},{\"id\":\"loop_speed_001\",\"name\":\"speed_loop\",\"properties\":[\"speed\"]}]}\n"
+        "{\"requirement\":\"...\",\"language\":\"en\",\"selected_loops\":[{\"id\":\"loop_current_001\",\"name\":\"current_loop\",\"properties\":[\"real_speed\"]},{\"id\":\"loop_mech_001\",\"name\":\"mech_loop\",\"properties\":[\"speed\",\"pid\"]}]}\n"
     )
 
 
@@ -234,11 +240,57 @@ def validate_loop_selection(payload: dict[str, Any]) -> None:
             raise ValueError(f"invalid loop name format: {loop_name}")
         if loop_id in id_seen:
             raise ValueError(f"duplicate loop id: {loop_id}")
-        if not isinstance(properties, list) or len(properties) != 1:
-            raise ValueError(f"properties must contain exactly one item for loop: {loop_name}")
+        if not isinstance(properties, list) or not properties:
+            raise ValueError(f"properties must be a non-empty list for loop: {loop_name}")
         if not all(isinstance(prop, str) and prop.strip() for prop in properties):
             raise ValueError(f"properties must contain only non-empty strings for loop: {loop_name}")
+
+        is_mech = "mech" in loop_name or "speed" in loop_name or "position" in loop_name
+        if is_mech:
+            if len(properties) not in {1, 2}:
+                raise ValueError(f"mechanical loop properties must contain one or two items for loop: {loop_name}")
+        else:
+            if len(properties) != 1:
+                raise ValueError(f"non-mechanical loop properties must contain exactly one item for loop: {loop_name}")
         id_seen.add(loop_id)
+
+
+def _split_raw_properties(raw_properties: Any) -> list[str]:
+    if isinstance(raw_properties, str):
+        return [part.strip().lower() for part in re.split(r"[,/|]", raw_properties) if part.strip()]
+    if isinstance(raw_properties, list):
+        out: list[str] = []
+        for prop in raw_properties:
+            if isinstance(prop, str) and prop.strip():
+                out.append(prop.strip().lower())
+        return out
+    return []
+
+
+def _infer_mech_method(requirement: str, raw_props: list[str]) -> str:
+    for prop in raw_props:
+        if prop in MECH_METHODS:
+            return prop
+
+    low_req = (requirement or "").lower()
+    if " smc" in f" {low_req}" or "滑模" in requirement:
+        return "smc"
+    if " mit" in f" {low_req}" or " model-in-the-loop" in low_req or "模型在环" in requirement:
+        return "mit"
+    if " pid" in f" {low_req}" or "比例积分" in requirement:
+        return "pid"
+    return "pid"
+
+
+def _infer_mech_target(loop_name: str, raw_props: list[str]) -> str:
+    for prop in raw_props:
+        if prop in MECH_TARGETS:
+            return prop
+
+    low_name = (loop_name or "").lower()
+    if "position" in low_name:
+        return "position"
+    return "speed"
 
 
 def canonicalize_loop_selection(payload: dict[str, Any]) -> dict[str, Any]:
@@ -246,6 +298,8 @@ def canonicalize_loop_selection(payload: dict[str, Any]) -> dict[str, Any]:
 
     normalized: list[dict[str, Any]] = []
     seen_names: set[str] = set()
+
+    requirement = str(payload.get("requirement") or "")
 
     for item in payload.get("selected_loops") or []:
         loop_name = str(item.get("name") or "").strip().lower()
@@ -259,15 +313,20 @@ def canonicalize_loop_selection(payload: dict[str, Any]) -> dict[str, Any]:
             digest = hashlib.sha1(loop_name.encode("utf-8")).hexdigest()[:8]
             canonical_id = f"loop_custom_{digest}"
 
-        properties = list(LOOP_PROPERTY_LIBRARY.get(loop_name) or [])
-        if not properties:
-            raw_properties = item.get("properties")
-            if isinstance(raw_properties, str):
-                raw_properties = [part.strip() for part in re.split(r"[,/|]", raw_properties) if part.strip()]
-            if isinstance(raw_properties, list) and raw_properties and all(isinstance(prop, str) and prop.strip() for prop in raw_properties):
-                properties = [str(raw_properties[0]).strip()]
-            else:
-                properties = [f"{loop_name}_input"]
+        raw_props = _split_raw_properties(item.get("properties"))
+        is_mech = "mech" in loop_name or "speed" in loop_name or "position" in loop_name
+
+        if is_mech:
+            mech_target = _infer_mech_target(loop_name, raw_props)
+            mech_method = _infer_mech_method(requirement, raw_props)
+            properties = [mech_target, mech_method]
+        else:
+            properties = list(LOOP_PROPERTY_LIBRARY.get(loop_name) or [])
+            if not properties:
+                if raw_props:
+                    properties = [raw_props[0]]
+                else:
+                    properties = [f"{loop_name}_input"]
 
         normalized.append({"id": canonical_id, "name": loop_name, "properties": properties})
 
@@ -286,15 +345,27 @@ def _normalize_mechanical_loops(payload: dict[str, Any]) -> dict[str, Any]:
     """Convert speed/position loops into a single mech loop for backward compatibility.
 
     Rules:
-    - If any loop contains 'position' (in id or name), drop any 'speed' loops and keep a single 'mech_loop' with property 'position'.
-    - Else if only 'speed' loops exist, rename them to a single 'mech_loop' with property 'speed'.
-    - Preserve other loops unchanged. Ensure single-property constraint.
+    - If any loop contains 'position' (in id or name), drop any 'speed' loops and keep a single 'mech_loop' with properties ['position', '<method>'].
+    - Else if only 'speed' loops exist, rename them to a single 'mech_loop' with properties ['speed', '<method>'].
+    - '<method>' is selected by LLM preference in properties first, then requirement inference fallback.
+    - Preserve other loops unchanged.
     """
     loops = list(payload.get("selected_loops") or [])
     if not loops:
         return payload
 
+    requirement = str(payload.get("requirement") or "")
     has_position = any(("position" in (l.get("name") or "").lower() or "position" in (l.get("id") or "").lower()) for l in loops)
+
+    mech_method = "pid"
+    for l in loops:
+        raw_props = _split_raw_properties(l.get("properties"))
+        if any(prop in MECH_METHODS for prop in raw_props):
+            mech_method = _infer_mech_method(requirement, raw_props)
+            break
+    else:
+        mech_method = _infer_mech_method(requirement, [])
+
     new_loops: list[dict[str, Any]] = []
     mech_added = False
 
@@ -304,7 +375,7 @@ def _normalize_mechanical_loops(payload: dict[str, Any]) -> dict[str, Any]:
         if has_position:
             if "position" in name or "position" in lid:
                 if not mech_added:
-                    new_loops.append({"id": "loop_mech_001", "name": "mech_loop", "properties": ["position"]})
+                    new_loops.append({"id": "loop_mech_001", "name": "mech_loop", "properties": ["position", mech_method]})
                     mech_added = True
                 # skip duplicates
             elif "speed" in name or "speed" in lid:
@@ -315,7 +386,7 @@ def _normalize_mechanical_loops(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             if "speed" in name or "speed" in lid:
                 if not mech_added:
-                    new_loops.append({"id": "loop_mech_001", "name": "mech_loop", "properties": ["speed"]})
+                    new_loops.append({"id": "loop_mech_001", "name": "mech_loop", "properties": ["speed", mech_method]})
                     mech_added = True
                 # skip other speed loops
             else:
@@ -323,7 +394,16 @@ def _normalize_mechanical_loops(payload: dict[str, Any]) -> dict[str, Any]:
 
     # If mech not added but there were speed/position names (edge case), add fallback
     if not mech_added and any(("speed" in (l.get("name") or "").lower() or "position" in (l.get("name") or "").lower()) for l in loops):
-        new_loops.insert(0, {"id": "loop_mech_001", "name": "mech_loop", "properties": ["speed"]})
+        new_loops.insert(0, {"id": "loop_mech_001", "name": "mech_loop", "properties": ["speed", mech_method]})
+
+    # Ensure mech_loop always keeps two ordered attributes: [speed|position, pid|mit|smc]
+    for loop in new_loops:
+        if (loop.get("name") or "").lower() != "mech_loop":
+            continue
+        raw_props = _split_raw_properties(loop.get("properties"))
+        target = _infer_mech_target("mech_loop", raw_props)
+        method = _infer_mech_method(requirement, raw_props)
+        loop["properties"] = [target, method]
 
     # Ensure deterministic order using existing ranking
     new_loops.sort(key=lambda item: (LOOP_ORDER_RANK.get(item["name"], 99), item["id"]))

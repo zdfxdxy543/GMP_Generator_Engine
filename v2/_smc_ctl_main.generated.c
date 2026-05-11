@@ -1,6 +1,7 @@
 #include <gmp_core.h>
 #include <ctrl_settings.h>
 #include "ctl_main.h"
+#include "paras.generated.h"
 #include <xplt.peripheral.h>
 #include <core/pm/function_scheduler.h>
 
@@ -23,8 +24,8 @@ mtr_current_ctrl_t mtr_ctrl;
 mtr_current_init_t mtr_ctrl_init;
 
 // Start Define Motion Controller
-ctl_mech_ctrl_t mech_ctrl;
-ctl_mech_ctrl_init_t mech_init;
+ctl_smc_mech_ctrl_t smc_ctrl;
+ctl_smc_mech_init_t smc_init;
 // End Define Motion Controller
 
 // Observer: SMO, FO, Speed measurement.
@@ -62,7 +63,8 @@ void ctl_init()
     ctl_fast_disable_output();
 
     // Start Controller Init
-
+    Setup_Motor_Current();
+    Setup_SMC_Mechanical_Controller();
     // End Controller Init
 
     //
@@ -108,11 +110,13 @@ void ctl_init()
     #endif // ENABLE_SMO
 
     // Start Encoder Binding
-
+    ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);
+    ctl_attach_smc_mech_ctrl(&smc_ctrl, &pos_enc.encif, &spd_enc.encif);
     // End Encoder Binding
 
     // Start Enable
-
+    ctl_enable_mtr_current_ctrl(&mtr_ctrl);
+    ctl_enable_smc_mech_ctrl(&smc_ctrl);
     // End Enable
 
     //

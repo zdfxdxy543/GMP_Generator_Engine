@@ -1,0 +1,8 @@
+﻿{
+  "requirement": "pid test",
+  "language": "en",
+  "selected_loops": [
+    {"id":"loop_current_001","name":"current_loop","properties":["real_speed"]},
+    {"id":"loop_mech_001","name":"mech_loop","properties":["position","pid"]}
+  ]
+}

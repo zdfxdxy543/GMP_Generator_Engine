@@ -1,0 +1,11 @@
+当id包含mech而且属性包含pid时：
+    在Paras Define区中添加以下程序：
+    #define POS_KP 5.0f;
+    #define POS_KI 1.0f;
+
+    #define VEL_KP 5.0f;
+    #define VEL_KI 1.0f;
+
+    #define SPEED_LIMIT 1.0f;
+    #define SPEED_SLOPE_LIMIT 1.0f;
+    #define CUR_LIMIT 0.3f;

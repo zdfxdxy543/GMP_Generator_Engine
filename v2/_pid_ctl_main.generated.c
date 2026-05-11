@@ -1,6 +1,7 @@
 #include <gmp_core.h>
 #include <ctrl_settings.h>
 #include "ctl_main.h"
+#include "paras.generated.h"
 #include <xplt.peripheral.h>
 #include <core/pm/function_scheduler.h>
 
@@ -62,7 +63,8 @@ void ctl_init()
     ctl_fast_disable_output();
 
     // Start Controller Init
-
+    Setup_Motor_Current();
+    Setup_Mechanical_Controller();
     // End Controller Init
 
     //
@@ -108,11 +110,13 @@ void ctl_init()
     #endif // ENABLE_SMO
 
     // Start Encoder Binding
-
+    ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);
+    ctl_attach_mech_ctrl(&mech_ctrl, &pos_enc.encif, &spd_enc.encif);
     // End Encoder Binding
 
     // Start Enable
-
+    ctl_enable_mtr_current_ctrl(&mtr_ctrl);
+    ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_POSITION);
     // End Enable
 
     //

@@ -1,8 +1,12 @@
 """Generate a controller_loop_ids-style JSON from a controller core structure.
 
 Reads `controller_core_structure.json`, applies the mech normalization from the
-exporter, and writes `controller_loop_ids_from_core.json` with single-property
-entries and names/ids normalized (speed/position -> mech, position wins).
+exporter, and writes `controller_loop_ids_from_core.json` with names/ids
+normalized (speed/position -> mech, position wins).
+
+For `mech_loop`, properties always contain two ordered attributes:
+1) target mode: speed or position
+2) control method: pid, mit, or smc
 """
 from __future__ import annotations
 
@@ -11,7 +15,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-import controller_core_structure_exporter as core_exporter
+try:
+    import v2.controller_core_structure_exporter as core_exporter
+except ModuleNotFoundError:
+    import controller_core_structure_exporter as core_exporter
 import controller_loop_id_exporter as id_exporter
 
 
@@ -39,6 +46,17 @@ def pick_property_from_original(original_blocks: list[dict[str, Any]], block_nam
     return f"{block_name}_input"
 
 
+def infer_mech_method(requirement: str) -> str:
+    low_req = (requirement or "").lower()
+    if " smc" in f" {low_req}" or "滑模" in requirement:
+        return "smc"
+    if " mit" in f" {low_req}" or " model-in-the-loop" in low_req or "模型在环" in requirement:
+        return "mit"
+    if " pid" in f" {low_req}" or "比例积分" in requirement:
+        return "pid"
+    return "pid"
+
+
 def main(requirement: str | None = None) -> int:
     base = Path(__file__).with_name("controller_core_structure.json")
     loop_ids_out = Path(__file__).with_name("controller_loop_ids_from_core.json")
@@ -51,6 +69,17 @@ def main(requirement: str | None = None) -> int:
 
     # Apply the same mech-normalization used by exporter
     normalized = core_exporter._normalize_mechanical_structure(json.loads(json.dumps(original)))
+
+    # Resolve requirement precedence early so mech method can be derived from it.
+    if requirement and requirement.strip():
+        req_text = requirement.strip()
+    else:
+        try:
+            req_text = json.loads(Path(__file__).with_name("controller_loop_ids.json").read_text(encoding="utf-8")).get("requirement")
+        except Exception:
+            req_text = original.get("requirement") or ""
+
+    mech_method = infer_mech_method(req_text)
 
     selected: list[dict[str, Any]] = []
     seen_names: set[str] = set()
@@ -66,22 +95,16 @@ def main(requirement: str | None = None) -> int:
 
         cid = canonical_id_for(lname)
 
-        # Determine property based on the original blocks: prefer position if present
+        # Determine properties from the original blocks.
+        # mech_loop uses dual-attribute properties: [speed|position, pid|mit|smc]
         prop = pick_property_from_original(original.get("blocks") or [], name)
-
-        selected.append({"id": cid, "name": lname, "properties": [prop]})
+        if lname == "mech_loop":
+            selected.append({"id": cid, "name": lname, "properties": [prop, mech_method]})
+        else:
+            selected.append({"id": cid, "name": lname, "properties": [prop]})
 
     # Keep deterministic ordering using existing exporter ordering rules
     selected.sort(key=lambda item: (id_exporter.LOOP_ORDER_RANK.get(item["name"], 99), item["id"]))
-
-    # Resolve requirement precedence: CLI > controller_loop_ids.json > core structure requirement
-    if requirement and requirement.strip():
-        req_text = requirement.strip()
-    else:
-        try:
-            req_text = json.loads(Path(__file__).with_name("controller_loop_ids.json").read_text(encoding="utf-8")).get("requirement")
-        except Exception:
-            req_text = original.get("requirement") or ""
 
     out = {
         "requirement": req_text,

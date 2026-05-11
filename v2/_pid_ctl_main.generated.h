@@ -97,6 +97,11 @@ GMP_STATIC_INLINE void ctl_dispatch(void)
         ctl_step_spd_calc(&spd_enc);
 
         // Start Motor Control
+        ctl_step_mech_ctrl(&mech_ctrl);
+
+        ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));
+
+        ctl_step_current_controller(&mtr_ctrl);
 
         // End Motor Control
 
