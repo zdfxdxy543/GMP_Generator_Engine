@@ -1,37 +1,73 @@
+#include <gmp_core.h>
+#include <ctrl_settings.h>
 #include "ctl_main.h"
-#include "ctl/component/motor_control/suite_pmsm/pmsm_ctrl.h"
-#include "ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h"
-#include "ctl/component/motor_control/basic/mtr_protection.h"
-#include "ctl/component/motor_control/interface/encoder.h"
-#include "ctl/component/hardware_preset/pmsm_motor/GBM2804H_100T.h"
-#include "ctl/component/interface/gmp_standard_interface.h"
-#include "ctl/component/interface/pwm_channel.h"
-#include "ctl/component/interface/adc_ptr_channel.h"
-#include "ctl/component/motor_control.h"
-#include "ctl/component/intrinsic.h"
-#include "ctl/component/interface/CiA402.h"
+#include <xplt.peripheral.h>
+#include <core/pm/function_scheduler.h>
 
-/* Global controller instances */
-pmsm_controller_t pmsm_ctrl;
+//=================================================================================================
+// global controller variables
+
+// state machine
+cia402_sm_t cia402_sm;
+ctl_mtr_protect_t protection;
+
+// modulator: SPWM modulator / SVPWM modulator / NPC modulator
+#if defined USING_NPC_MODULATOR
+npc_modulator_t spwm;
+#else
+spwm_modulator_t spwm;
+#endif // USING_NPC_MODULATOR
+
+// controller body: Current controller, Command dispatcher, motion controller
+mtr_current_ctrl_t mtr_ctrl;
+mtr_current_init_t mtr_ctrl_init;
+
 ctl_mech_ctrl_t mech_ctrl;
-ctl_mtr_protect_t mtr_protect;
-pos_encoder_t encoder;
-ptr_adc_channel_t adc_channel;
-pwm_tri_channel_t pwm_channel;
-ctl_std_interface_t std_interface;
+ctl_mech_ctrl_init_t mech_init;
 
-/* Local variables */
-static cia402_state_t cia402_state;
-static uint8_t pwm_enabled = 0;
+// Observer: SMO, FO, Speed measurement.
+ctl_slope_f_pu_controller rg;
+pos_autoturn_encoder_t pos_enc;
+spd_calculator_t spd_enc;
 
-/* Forward declarations */
-static void apply_tunable_params(void);
-static void init_cia402(void);
-static void init_motor_protection_path(void);
+#ifdef ENABLE_SMO
 
-void ctl_init(void)
+ctl_pmsm_esmo_init_t smo_init;
+ctl_pmsm_esmo_t smo;
+
+#endif // ENABLE_SMO
+
+// additional controller: harmonic management
+
+//
+volatile fast_gt flag_system_running = 0;
+volatile fast_gt flag_error = 0;
+
+// adc calibrator flags
+adc_bias_calibrator_t adc_calibrator;
+volatile fast_gt flag_enable_adc_calibrator = 1;
+//volatile fast_gt flag_enable_adc_calibrator = 0;
+volatile fast_gt index_adc_calibrator = 0;
+
+//=================================================================================================
+// CTL initialize routine
+
+void ctl_init()
 {
-    /* Initialize libraries first */
+    //
+    // stop here and wait for user start the motor controller
+    //
+    ctl_fast_disable_output();
+
+    // Start Controller Init
+
+    //
+    // stop here and wait for user start the motor controller
+    //
+    ctl_fast_disable_output();
+
+    // Start Controller Init
+/* Initialize libraries first */
     ctl_init_motor_control_lib();
     ctl_init_intrinsic_lib();
     
@@ -64,8 +100,42 @@ void ctl_init(void)
     
     /* Initialize motor protection path */
     init_motor_protection_path();
-    
-    /* Attach components */
+    // End Controller Init
+
+    //
+    // init SPWM modulator
+    //
+#if defined USING_NPC_MODULATOR
+    ctl_init_npc_modulator(&spwm, CTRL_PWM_CMP_MAX, CTRL_PWM_DEADBAND_CMP, &mtr_ctrl.iuvw, float2ctrl(0.02),
+                           float2ctrl(0.005));
+#else
+    ctl_init_spwm_modulator(&spwm, CTRL_PWM_CMP_MAX, CTRL_PWM_DEADBAND_CMP, &mtr_ctrl.iuvw, float2ctrl(0.02),
+                            float2ctrl(0.005));
+#endif // USING_NPC_MODULATOR
+
+    //
+    // angle signal generator
+    //
+    ctl_init_const_slope_f_pu_controller(
+        // ramp angle generator
+        &rg,
+        // target frequency (Hz), target frequency slope (Hz/s)
+        20.0f, 20.0f,
+        // rated krpm, pole pairs
+        MOTOR_PARAM_MAX_SPEED / 1000.0f, mtr_ctrl_init.pole_pairs,
+        // ISR frequency
+        CONTROLLER_FREQUENCY);
+
+    //
+    // Encoder Init
+    //
+    ctl_init_autoturn_pos_encoder(&pos_enc, mtr_ctrl_init.pole_pairs, CTRL_POS_ENC_FS);
+    ctl_set_autoturn_pos_encoder_mech_offset(&pos_enc, float2ctrl(CTRL_POS_ENC_BIAS));
+
+    ctl_init_spd_calculator(&spd_enc, &pos_enc.encif, CONTROLLER_FREQUENCY, CTRL_MECH_DIV, MOTOR_PARAM_MAX_SPEED, 20.0f);
+
+    // Start Encoder Binding
+/* Attach components */
     ctl_attach_mech_ctrl(&mech_ctrl, &encoder.encif, &encoder.spdif);
     ctl_attach_pmsm_output(&pmsm_ctrl, &pwm_channel.pwm_if);
     
@@ -99,121 +169,301 @@ void ctl_init(void)
     /* Clear all controllers */
     clear_all_controllers();
 }
+    // End Controller Init
+
+    //
+    // init SPWM modulator
+    //
+#if defined USING_NPC_MODULATOR
+    ctl_init_npc_modulator(&spwm, CTRL_PWM_CMP_MAX, CTRL_PWM_DEADBAND_CMP, &mtr_ctrl.iuvw, float2ctrl(0.02),
+                           float2ctrl(0.005));
+#else
+    ctl_init_spwm_modulator(&spwm, CTRL_PWM_CMP_MAX, CTRL_PWM_DEADBAND_CMP, &mtr_ctrl.iuvw, float2ctrl(0.02),
+                            float2ctrl(0.005));
+#endif // USING_NPC_MODULATOR
+
+    //
+    // angle signal generator
+    //
+    ctl_init_const_slope_f_pu_controller(
+        // ramp angle generator
+        &rg,
+        // target frequency (Hz), target frequency slope (Hz/s)
+        20.0f, 20.0f,
+        // rated krpm, pole pairs
+        MOTOR_PARAM_MAX_SPEED / 1000.0f, mtr_ctrl_init.pole_pairs,
+        // ISR frequency
+        CONTROLLER_FREQUENCY);
+
+    //
+    // Encoder Init
+    //
+    ctl_init_autoturn_pos_encoder(&pos_enc, mtr_ctrl_init.pole_pairs, CTRL_POS_ENC_FS);
+    ctl_set_autoturn_pos_encoder_mech_offset(&pos_enc, float2ctrl(CTRL_POS_ENC_BIAS));
+
+    ctl_init_spd_calculator(&spd_enc, &pos_enc.encif, CONTROLLER_FREQUENCY, CTRL_MECH_DIV, MOTOR_PARAM_MAX_SPEED, 20.0f);
+
+    // Start Encoder Binding
+
+    // End Encoder Binding
+
+    //
+    // init and config CiA402 standard state machine
+    //
+    init_cia402_state_machine(&cia402_sm);
+    cia402_sm.minimum_transit_delay[3] = 100;
+
+#if defined SPECIFY_PC_ENVIRONMENT
+    cia402_sm.flag_enable_control_word = 0;
+    cia402_sm.current_cmd = CIA402_CMD_ENABLE_OPERATION;
+#endif // SPECIFY_PC_ENVIRONMENT
+
+    //
+    // init and config Motor Protection module
+    //
+    ctl_init_mtr_protect(&protection, CONTROLLER_FREQUENCY);
+    ctl_attach_mtr_protect_port(&protection, &mtr_ctrl.udc, (ctl_vector2_t*)&mtr_ctrl.idq0, &mtr_ctrl.idq_ref, NULL,
+                                NULL);
+    ctl_set_mtr_protect_mask(&protection, MTR_PROT_DEVIATION);
+
+    //
+    // init ADC Calibrator
+    //
+    ctl_init_adc_calibrator(&adc_calibrator, 20, 0.707f, CONTROLLER_FREQUENCY);
+
+    if (flag_enable_adc_calibrator)
+    {
+        ctl_enable_adc_calibrator(&adc_calibrator);
+    }
+}
+
+//=================================================================================================
+// CTL endless loop routine
+    // End Encoder Binding
+
+    //
+    // init and config CiA402 standard state machine
+    //
+    init_cia402_state_machine(&cia402_sm);
+    cia402_sm.minimum_transit_delay[3] = 100;
+
+#if defined SPECIFY_PC_ENVIRONMENT
+    cia402_sm.flag_enable_control_word = 0;
+    cia402_sm.current_cmd = CIA402_CMD_ENABLE_OPERATION;
+#endif // SPECIFY_PC_ENVIRONMENT
+
+    //
+    // init and config Motor Protection module
+    //
+    ctl_init_mtr_protect(&protection, CONTROLLER_FREQUENCY);
+    ctl_attach_mtr_protect_port(&protection, &mtr_ctrl.udc, (ctl_vector2_t*)&mtr_ctrl.idq0, &mtr_ctrl.idq_ref, NULL,
+                                NULL);
+    ctl_set_mtr_protect_mask(&protection, MTR_PROT_DEVIATION);
+
+    //
+    // init ADC Calibrator
+    //
+    ctl_init_adc_calibrator(&adc_calibrator, 20, 0.707f, CONTROLLER_FREQUENCY);
+
+    if (flag_enable_adc_calibrator)
+    {
+        ctl_enable_adc_calibrator(&adc_calibrator);
+    }
+}
+
+//=================================================================================================
+// CTL endless loop routine
 
 void ctl_mainloop(void)
 {
-    /* Update ADC readings */
-    ctl_step_ptr_adc_channel(&adc_channel);
-    
-    /* Update encoder position */
-    ctl_step_pos_encoder(&encoder, 0); /* Raw value to be filled by hardware */
-    
-    /* Update speed calculation */
-    ctl_step_spd_calc(&encoder.spd_calc);
-    
-    /* Execute fast loop controllers */
-    ctl_dispatch_fast_loop();
-    
-    /* Update PWM outputs if enabled */
-    if (pwm_enabled)
-    {
-        ctl_step_pwm_tri_channel(&pwm_channel, &pmsm_ctrl.pwm_out.duty);
-    }
-    
-    /* Update CiA402 state machine */
-    ctl_step_cia402(&cia402_state, &std_interface.enable);
-    
-    /* Execute protection task */
-    tsk_protect();
+    cia402_dispatch(&cia402_sm);
+
+    return;
 }
 
-void clear_all_controllers(void)
+//=================================================================================================
+// CiA402 default callback routine
+
+gmp_task_status_t tsk_protect(gmp_task_t* tsk)
 {
-    ctl_clear_pmsm_ctrl(&pmsm_ctrl);
+    GMP_UNUSED_VAR(tsk);
+
+    uint32_t error_mask = ctl_get_mtr_protect_mask(&protection);
+
+    if (mtr_ctrl.flag_enable_current_ctrl)
+    {
+        error_mask = error_mask & ~MTR_PROT_DEVIATION;
+    }
+    else
+    {
+        error_mask = error_mask | MTR_PROT_DEVIATION;
+    }
+
+    ctl_set_mtr_protect_mask(&protection, error_mask);
+
+#ifdef ENABLE_MOTOR_FAULT_PROTECTION
+    if (ctl_dispatch_mtr_protect_slow(&protection))
+    {
+        cia402_fault_request(&cia402_sm);
+    }
+#endif // ENABLE_MOTOR_FAULT_PROTECTION
+
+    return GMP_TASK_DONE;
+}
+
+void ctl_enable_pwm()
+{
+    ctl_fast_enable_output();
+}
+
+void ctl_disable_pwm()
+{
+    ctl_fast_disable_output();
+}
+
+void clear_all_controllers()
+{
+    ctl_clear_mtr_current_ctrl(&mtr_ctrl);
     ctl_clear_mech_ctrl(&mech_ctrl);
-    ctl_clear_mtr_protect(&mtr_protect);
-    
-    pmsm_ctrl.flag_enable_output = 0;
-    std_interface.enable = 0;
-    
-    ctl_disable_pwm();
+    ctl_clear_slope_f_pu(&rg);
+
+#if defined USING_NPC_MODULATOR
+    ctl_clear_npc_modulator(&spwm);
+#else
+    ctl_clear_spwm_modulator(&spwm);
+#endif // USING_NPC_MODULATOR
 }
 
-void tsk_protect(void)
+fast_gt ctl_exec_adc_calibration(void)
 {
-    /* Check motor protection conditions */
-    ctl_step_mtr_protect_fast(&mtr_protect);
-    
-    /* If protection triggered, disable PWM */
-    if (mtr_protect.fault_status != 0)
+    //
+    // 1. ADC Auto calibrate
+    //
+    if (flag_enable_adc_calibrator)
     {
-        ctl_disable_pwm();
-        std_interface.enable = 0;
-        pmsm_ctrl.flag_enable_output = 0;
+        if (ctl_is_adc_calibrator_cmpt(&adc_calibrator) && ctl_is_adc_calibrator_result_valid(&adc_calibrator))
+        {
+
+            // index_adc_calibrator == 7, for Ibus
+            if (index_adc_calibrator == 7)
+            {
+                // vbus get result
+                idc.bias = idc.bias + ctl_div(ctl_get_adc_calibrator_result(&adc_calibrator), idc.gain);
+
+                // move to next position
+                index_adc_calibrator += 1;
+
+                // adc calibrate process done.
+                flag_enable_adc_calibrator = 0;
+
+                // clear INV controller
+                clear_all_controllers();
+
+                // ADC Calibrator complete here.
+                //ctl_enable_gfl_inv(&inv_ctrl);
+            }
+
+            // index_adc_calibrator == 6, for Vbus
+            else if (index_adc_calibrator == 6)
+            {
+                // vbus get result
+                //udc.bias = udc.bias + ctl_div(ctl_get_adc_calibrator_result(&adc_calibrator), udc.gain);
+
+                // move to next position
+                index_adc_calibrator += 1;
+
+                // clear calibrator
+                ctl_clear_adc_calibrator(&adc_calibrator);
+
+                // enable calibrator to next position
+                ctl_enable_adc_calibrator(&adc_calibrator);
+            }
+
+            // index_adc_calibrator == 5 ~ 3, for Vuvw
+            else if (index_adc_calibrator <= 5 && index_adc_calibrator >= 3)
+            {
+                // vuvw get result
+                uuvw.bias[index_adc_calibrator - 3] =
+                    uuvw.bias[index_adc_calibrator - 3] +
+                    ctl_div(ctl_get_adc_calibrator_result(&adc_calibrator), uuvw.gain[index_adc_calibrator - 3]);
+
+                // move to next position
+                index_adc_calibrator += 1;
+
+                // clear calibrator
+                ctl_clear_adc_calibrator(&adc_calibrator);
+
+                // enable calibrator to next position
+                ctl_enable_adc_calibrator(&adc_calibrator);
+            }
+
+            // index_adc_calibrator == 2 ~ 0, for Iuvw
+            else if (index_adc_calibrator <= 2)
+            {
+                // iuvw get result
+                iuvw.bias[index_adc_calibrator] =
+                    iuvw.bias[index_adc_calibrator] +
+                    ctl_div(ctl_get_adc_calibrator_result(&adc_calibrator), iuvw.gain[index_adc_calibrator]);
+
+                // move to next position
+                index_adc_calibrator += 1;
+
+                // clear calibrator
+                ctl_clear_adc_calibrator(&adc_calibrator);
+
+                // enable calibrator to next position
+                ctl_enable_adc_calibrator(&adc_calibrator);
+            }
+
+            // over-range protection
+            if (index_adc_calibrator > 13)
+                flag_enable_adc_calibrator = 0;
+        }
+
+        // ADC calibrate is not complete
+        return 0;
     }
+
+    // skip calibrate routine
+    return 1;
 }
 
-void ctl_enable_pwm(void)
+void Setup_Motor_Current()
 {
-    if (mtr_protect.fault_status == 0)
-    {
-        pwm_enabled = 1;
-        pmsm_ctrl.flag_enable_output = 1;
-        ctl_enable_pwm_hardware(&pwm_channel);
-    }
+    mtr_ctrl_init.fs = CONTROLLER_FREQUENCY;
+    mtr_ctrl_init.v_base = CTRL_VOLTAGE_BASE;
+    mtr_ctrl_init.i_base = CTRL_CURRENT_BASE;
+
+    mtr_ctrl_init.v_bus = CTRL_VOLTAGE_BASE;
+    mtr_ctrl_init.v_phase_limit = MOTOR_PARAM_RATED_VOLTAGE;
+
+    mtr_ctrl_init.freq_base = MOTOR_PARAM_RATED_FREQUENCY;
+    mtr_ctrl_init.spd_base = MOTOR_PARAM_MAX_SPEED / 1000;
+    mtr_ctrl_init.pole_pairs = MOTOR_PARAM_POLE_PAIRS;
+
+    mtr_ctrl_init.mtr_Ld = MOTOR_PARAM_LS;
+    mtr_ctrl_init.mtr_Lq = MOTOR_PARAM_LS;
+    mtr_ctrl_init.mtr_Rs = MOTOR_PARAM_RS;
+
+    ctl_auto_tuning_mtr_current_ctrl(&mtr_ctrl_init);
+    ctl_init_mtr_current_ctrl(&mtr_ctrl, &mtr_ctrl_init);
 }
 
-void ctl_disable_pwm(void)
+void Setup_Mechanical_Controller()
 {
-    pwm_enabled = 0;
-    pmsm_ctrl.flag_enable_output = 0;
-    ctl_disable_pwm_hardware(&pwm_channel);
-}
+    mech_init.fs = CONTROLLER_FREQUENCY;
 
-static void apply_tunable_params(void)
-{
-    /* Apply voltage limits */
-    pmsm_ctrl.voltage_limit_max = ctl_get_tunable_param("voltage_limit_max");
-    pmsm_ctrl.voltage_limit_min = ctl_get_tunable_param("voltage_limit_min");
-    
-    /* Apply current limits */
-    pmsm_ctrl.current_limit_max = ctl_get_tunable_param("current_limit_max");
-    pmsm_ctrl.current_limit_min = ctl_get_tunable_param("current_limit_min");
-    
-    /* Apply mechanical controller parameters */
-    mech_ctrl.velocity_kp = ctl_get_tunable_param("velocity_kp");
-    mech_ctrl.velocity_ki = ctl_get_tunable_param("velocity_ki");
-    mech_ctrl.position_kp = ctl_get_tunable_param("position_kp");
-    
-    /* Apply protection thresholds */
-    mtr_protect.overcurrent_threshold = ctl_get_tunable_param("overcurrent_threshold");
-    mtr_protect.overvoltage_threshold = ctl_get_tunable_param("overvoltage_threshold");
-    mtr_protect.overtemp_threshold = ctl_get_tunable_param("overtemp_threshold");
-}
+    mech_init.pos_kp = 5.0f;
+    mech_init.pos_ki = 1.0f;
 
-static void init_cia402(void)
-{
-    ctl_init_cia402(&cia402_state);
-    cia402_state.target_state = CIA402_STATE_OPERATION_ENABLED;
-    cia402_state.current_state = CIA402_STATE_SWITCH_ON_DISABLED;
-}
+    mech_init.vel_kp = 5.0f;
+    mech_init.vel_ki = 1.0f;
 
-static void init_motor_protection_path(void)
-{
-    /* Attach protection inputs */
-    ctl_attach_mtr_protect_port(&mtr_protect,
-                               &adc_channel.dc_voltage,
-                               &adc_channel.current_meas,
-                               &pmsm_ctrl.current_ref,
-                               &adc_channel.temp_motor,
-                               &adc_channel.temp_inverter);
-    
-    /* Set default protection parameters */
-    mtr_protect.overcurrent_threshold = 1.2f;  /* 120% of rated current */
-    mtr_protect.overvoltage_threshold = 1.15f; /* 115% of nominal voltage */
-    mtr_protect.overtemp_threshold = 85.0f;    /* 85°C */
-    mtr_protect.undervoltage_threshold = 0.85f; /* 85% of nominal voltage */
-    
-    /* Initialize fault status */
-    mtr_protect.fault_status = 0;
+    mech_init.speed_limit = 1.0f;
+    mech_init.speed_slope_limit = 1.0f;
+    mech_init.cur_limit = 0.3f;
+
+    mech_init.mech_division = CTRL_MECH_DIV;
+
+    ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
 }

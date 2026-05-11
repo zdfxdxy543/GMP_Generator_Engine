@@ -282,6 +282,55 @@ def canonicalize_loop_selection(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _normalize_mechanical_loops(payload: dict[str, Any]) -> dict[str, Any]:
+    """Convert speed/position loops into a single mech loop for backward compatibility.
+
+    Rules:
+    - If any loop contains 'position' (in id or name), drop any 'speed' loops and keep a single 'mech_loop' with property 'position'.
+    - Else if only 'speed' loops exist, rename them to a single 'mech_loop' with property 'speed'.
+    - Preserve other loops unchanged. Ensure single-property constraint.
+    """
+    loops = list(payload.get("selected_loops") or [])
+    if not loops:
+        return payload
+
+    has_position = any(("position" in (l.get("name") or "").lower() or "position" in (l.get("id") or "").lower()) for l in loops)
+    new_loops: list[dict[str, Any]] = []
+    mech_added = False
+
+    for l in loops:
+        name = (l.get("name") or "").lower()
+        lid = (l.get("id") or "").lower()
+        if has_position:
+            if "position" in name or "position" in lid:
+                if not mech_added:
+                    new_loops.append({"id": "loop_mech_001", "name": "mech_loop", "properties": ["position"]})
+                    mech_added = True
+                # skip duplicates
+            elif "speed" in name or "speed" in lid:
+                # drop speed when position exists
+                continue
+            else:
+                new_loops.append(l)
+        else:
+            if "speed" in name or "speed" in lid:
+                if not mech_added:
+                    new_loops.append({"id": "loop_mech_001", "name": "mech_loop", "properties": ["speed"]})
+                    mech_added = True
+                # skip other speed loops
+            else:
+                new_loops.append(l)
+
+    # If mech not added but there were speed/position names (edge case), add fallback
+    if not mech_added and any(("speed" in (l.get("name") or "").lower() or "position" in (l.get("name") or "").lower()) for l in loops):
+        new_loops.insert(0, {"id": "loop_mech_001", "name": "mech_loop", "properties": ["speed"]})
+
+    # Ensure deterministic order using existing ranking
+    new_loops.sort(key=lambda item: (LOOP_ORDER_RANK.get(item["name"], 99), item["id"]))
+    payload["selected_loops"] = new_loops
+    return payload
+
+
 def select_loops(requirement: str, settings: dict[str, Any]) -> dict[str, Any]:
     api_key = resolve_api_key(settings)
     if not api_key:
@@ -309,7 +358,9 @@ def select_loops(requirement: str, settings: dict[str, Any]) -> dict[str, Any]:
 
     payload = parse_loop_json(text)
     validate_loop_selection(payload)
-    return canonicalize_loop_selection(payload)
+    normalized = canonicalize_loop_selection(payload)
+    normalized = _normalize_mechanical_loops(normalized)
+    return normalized
 
 
 def export_json(output_path: Path, requirement: str, settings_path: str | Path | None = None) -> Path:

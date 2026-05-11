@@ -186,6 +186,169 @@ def validate_structure(structure: dict[str, Any]) -> None:
         raise ValueError("output_format must be an object")
 
 
+def _is_mechanical_loop_name(text: str) -> bool:
+    low = (text or "").lower()
+    return "speed" in low or "position" in low
+
+
+def _rewrite_mechanical_name(text: str) -> str:
+    if not _is_mechanical_loop_name(text):
+        return text
+    return re.sub(r"(?i)(speed|position)", "mech", text)
+
+
+def _normalize_mechanical_structure(structure: dict[str, Any]) -> dict[str, Any]:
+    """Normalize speed/position loop names to a single mech loop for backward compatibility."""
+
+    blocks = structure.get("blocks") or []
+    edges = structure.get("edges") or []
+    layout = structure.get("layout") or {}
+
+    mech_candidates: list[tuple[int, dict[str, Any], str, str, bool]] = []
+    for index, block in enumerate(blocks):
+        block_id = str(block.get("id") or "")
+        block_name = str(block.get("name") or "")
+        has_position = "position" in block_id.lower() or "position" in block_name.lower()
+        has_speed = "speed" in block_id.lower() or "speed" in block_name.lower()
+        if has_position or has_speed:
+            mech_candidates.append((index, block, block_id, block_name, has_position))
+
+    if not mech_candidates:
+        return structure
+
+    keep_position = any(item[4] for item in mech_candidates)
+    kept_candidate: tuple[int, dict[str, Any], str, str, bool] | None = None
+    dropped_ids: set[str] = set()
+    dropped_names: set[str] = set()
+
+    for candidate in mech_candidates:
+        index, block, block_id, block_name, has_position = candidate
+        is_speed_only = "speed" in block_id.lower() or "speed" in block_name.lower()
+        if keep_position:
+            if is_speed_only and not has_position:
+                dropped_ids.add(block_id)
+                dropped_names.add(block_name)
+                continue
+            if kept_candidate is None and has_position:
+                kept_candidate = candidate
+                continue
+            if has_position:
+                dropped_ids.add(block_id)
+                dropped_names.add(block_name)
+                continue
+            if is_speed_only:
+                dropped_ids.add(block_id)
+                dropped_names.add(block_name)
+                continue
+        else:
+            if is_speed_only and kept_candidate is None:
+                kept_candidate = candidate
+                continue
+            if is_speed_only:
+                dropped_ids.add(block_id)
+                dropped_names.add(block_name)
+                continue
+            if has_position:
+                dropped_ids.add(block_id)
+                dropped_names.add(block_name)
+
+    if kept_candidate is None:
+        return structure
+
+    kept_index, kept_block, kept_id, kept_name, _ = kept_candidate
+    mech_id = _rewrite_mechanical_name(kept_id)
+    mech_name = _rewrite_mechanical_name(kept_name)
+
+    block_name_map: dict[str, str] = {}
+    block_id_map: dict[str, str] = {}
+
+    normalized_blocks: list[dict[str, Any]] = []
+    for index, block in enumerate(blocks):
+        block_id = str(block.get("id") or "")
+        block_name = str(block.get("name") or "")
+
+        if block_id in dropped_ids or block_name in dropped_names:
+            continue
+
+        updated_block = dict(block)
+        if index == kept_index:
+            if block_id:
+                block_id_map[block_id] = mech_id
+                updated_block["id"] = mech_id
+            if block_name:
+                block_name_map[block_name] = mech_name
+                updated_block["name"] = mech_name
+        elif _is_mechanical_loop_name(block_id) or _is_mechanical_loop_name(block_name):
+            updated_block["id"] = _rewrite_mechanical_name(block_id)
+            updated_block["name"] = _rewrite_mechanical_name(block_name)
+            if block_id:
+                block_id_map[block_id] = updated_block["id"]
+            if block_name:
+                block_name_map[block_name] = updated_block["name"]
+
+        normalized_blocks.append(updated_block)
+
+    normalized_edges: list[dict[str, Any]] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        source = str(edge.get("source") or "")
+        target = str(edge.get("target") or "")
+        if source in dropped_names or target in dropped_names:
+            continue
+
+        updated_edge = dict(edge)
+        if source in block_name_map:
+            updated_edge["source"] = block_name_map[source]
+        elif _is_mechanical_loop_name(source):
+            updated_edge["source"] = _rewrite_mechanical_name(source)
+
+        if target in block_name_map:
+            updated_edge["target"] = block_name_map[target]
+        elif _is_mechanical_loop_name(target):
+            updated_edge["target"] = _rewrite_mechanical_name(target)
+
+        edge_id = str(updated_edge.get("id") or "")
+        if edge_id:
+            for old, new in {**block_name_map, **block_id_map}.items():
+                if old and old in edge_id:
+                    edge_id = edge_id.replace(old, new)
+            if _is_mechanical_loop_name(edge_id):
+                edge_id = _rewrite_mechanical_name(edge_id)
+            updated_edge["id"] = edge_id
+
+        normalized_edges.append(updated_edge)
+
+    def _normalize_layout_value(value: Any) -> Any:
+        if isinstance(value, list):
+            normalized: list[Any] = []
+            seen: set[str] = set()
+            for item in value:
+                if not isinstance(item, str):
+                    normalized.append(item)
+                    continue
+                if item in dropped_names:
+                    continue
+                rewritten = block_name_map.get(item, item)
+                if _is_mechanical_loop_name(rewritten):
+                    rewritten = _rewrite_mechanical_name(rewritten)
+                if rewritten in seen:
+                    continue
+                seen.add(rewritten)
+                normalized.append(rewritten)
+            return normalized
+        if isinstance(value, dict):
+            return {key: _normalize_layout_value(val) for key, val in value.items()}
+        return value
+
+    normalized_layout = _normalize_layout_value(layout)
+
+    structure["blocks"] = normalized_blocks
+    structure["edges"] = normalized_edges
+    structure["layout"] = normalized_layout
+    return structure
+
+
 def build_controller_core_structure(requirement: str, settings: dict[str, Any]) -> dict[str, Any]:
     api_key = resolve_api_key(settings)
     if not api_key:
@@ -211,6 +374,7 @@ def build_controller_core_structure(requirement: str, settings: dict[str, Any]) 
         raise RuntimeError("empty model response")
 
     structure = parse_response_json(text)
+    structure = _normalize_mechanical_structure(structure)
     validate_structure(structure)
     return structure
 

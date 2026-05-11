@@ -99,6 +99,10 @@ void ctl_init()
 
     // End Encoder Binding
 
+    // Start Enable
+
+    // End Enable
+
     //
     // init and config CiA402 standard state machine
     //

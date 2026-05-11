@@ -222,7 +222,130 @@ def normalize_control_structure(control: dict) -> dict:
             "fault": schedule.get("fault") or [],
         },
     }
-    return out
+    return apply_mechanical_loop_compatibility(out)
+
+
+def _is_speed_or_position_name(name: str) -> bool:
+    low = (name or "").lower()
+    return "speed" in low or "position" in low
+
+
+def _normalize_mechanical_instance_name(name: str) -> str:
+    low = (name or "").lower()
+    if not _is_speed_or_position_name(low):
+        return name
+    if "mech" in low:
+        return name
+    return "mech_loop"
+
+
+def _rewrite_endpoint_name(value: str, has_position: bool) -> tuple[str, bool]:
+    text = str(value or "")
+    low = text.lower()
+    if "speed" not in low and "position" not in low:
+        return text, False
+
+    if has_position and "speed" in low and "position" not in low:
+        return text, True
+
+    if "." in text:
+        module_name, rest = text.split(".", 1)
+        rewritten_module = _normalize_mechanical_instance_name(module_name)
+        return f"{rewritten_module}.{rest}", False
+
+    return _normalize_mechanical_instance_name(text), False
+
+
+def apply_mechanical_loop_compatibility(control: dict) -> dict:
+    """Normalize speed/position loop names to a mechanical-loop alias.
+
+    If a position loop exists, the speed loop is removed and only the position-based
+    mechanical loop remains in the control structure.
+    """
+
+    modules = control.get("modules") or []
+    links = control.get("links") or []
+    schedule = control.get("schedule") or {}
+
+    position_instances: set[str] = set()
+    speed_instances: set[str] = set()
+
+    for mod in modules:
+        name = str(mod.get("instance_name") or "")
+        low = name.lower()
+        if "position" in low:
+            position_instances.add(name)
+        elif "speed" in low:
+            speed_instances.add(name)
+
+    has_position = bool(position_instances)
+
+    normalized_modules: list[dict] = []
+    mech_instance_seen = False
+    for mod in modules:
+        name = str(mod.get("instance_name") or "")
+        low = name.lower()
+        if "speed" not in low and "position" not in low:
+            normalized_modules.append(mod)
+            continue
+
+        if has_position and "speed" in low and "position" not in low:
+            # Backward compatibility rule: if position exists, drop speed.
+            continue
+
+        mod = dict(mod)
+        mod["instance_name"] = _normalize_mechanical_instance_name(name)
+        if mech_instance_seen:
+            # Avoid duplicate mech aliases when multiple legacy loop names map to the same alias.
+            continue
+        mech_instance_seen = True
+        normalized_modules.append(mod)
+
+    kept_instances = {str(mod.get("instance_name") or "") for mod in normalized_modules}
+
+    normalized_schedule: dict[str, list[str]] = {}
+    for phase, items in schedule.items():
+        if not isinstance(items, list):
+            normalized_schedule[phase] = items
+            continue
+
+        seen: set[str] = set()
+        phase_items: list[str] = []
+        for item in items:
+            name = str(item or "")
+            low = name.lower()
+            if "speed" in low or "position" in low:
+                if has_position and "speed" in low and "position" not in low:
+                    continue
+                name = "mech_loop"
+            if name not in kept_instances and name != "mech_loop":
+                continue
+            if name in seen:
+                continue
+            seen.add(name)
+            phase_items.append(name)
+        normalized_schedule[phase] = phase_items
+
+    normalized_links: list[dict] = []
+    for link in links:
+        if not isinstance(link, dict):
+            continue
+        updated = dict(link)
+        drop_link = False
+        for endpoint in ("from", "to"):
+            rewritten, should_drop = _rewrite_endpoint_name(updated.get(endpoint), has_position)
+            if should_drop:
+                drop_link = True
+                break
+            updated[endpoint] = rewritten
+        if drop_link:
+            continue
+        normalized_links.append(updated)
+
+    control["modules"] = normalized_modules
+    control["links"] = normalized_links
+    control["schedule"] = normalized_schedule
+    return control
 
 
 def has_autocallable_step_api(item: dict) -> bool:

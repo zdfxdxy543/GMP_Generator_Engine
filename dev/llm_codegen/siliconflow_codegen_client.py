@@ -546,6 +546,85 @@ def generate_four_project_files(api_key: str, base_url: str, model: str, system_
     return generated, raw_by_file, prompt_by_file
 
 
+def _repo_root() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def _example_file_path(file_name: str) -> str:
+    return os.path.join(_repo_root(), "v2", "Example", file_name)
+
+
+def _read_text(path: str) -> str:
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        return handle.read()
+
+
+def _write_text(path: str, text: str) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def _extract_ctl_init_sections(generated_ctl_main: str) -> tuple[str, str]:
+    init_start = generated_ctl_main.find("void ctl_init")
+    next_func = generated_ctl_main.find("void ctl_mainloop", init_start if init_start >= 0 else 0)
+    if init_start < 0 or next_func < 0:
+        raise RuntimeError("generated ctl_main.c does not contain the expected ctl_init/ctl_mainloop functions")
+
+    init_body_start = generated_ctl_main.find("{", init_start)
+    if init_body_start < 0:
+        raise RuntimeError("generated ctl_main.c is missing ctl_init body")
+
+    init_body = generated_ctl_main[init_body_start + 1:next_func].rstrip()
+    attach_marker = "/* Attach components */"
+    attach_pos = init_body.find(attach_marker)
+    if attach_pos < 0:
+        return init_body.strip(), ""
+
+    init_block = init_body[:attach_pos].rstrip()
+    binding_block = init_body[attach_pos:].strip()
+    return init_block, binding_block
+
+
+def _replace_block_between_markers(text: str, start_token: str, end_token: str, replacement: str) -> str:
+    lines = text.splitlines()
+    start_idx = None
+    end_idx = None
+    for idx, line in enumerate(lines):
+        if start_idx is None and start_token in line:
+            start_idx = idx
+            continue
+        if start_idx is not None and end_token in line:
+            end_idx = idx
+            break
+
+    if start_idx is None or end_idx is None or end_idx <= start_idx:
+        raise RuntimeError(f"unable to locate template markers: {start_token} / {end_token}")
+
+    replacement_lines = replacement.splitlines()
+    return "\n".join(lines[: start_idx + 1] + replacement_lines + lines[end_idx:]) + "\n"
+
+
+def merge_example_ctl_main_into_output(output_dir: str, generated_ctl_main_path: str) -> str:
+    template_path = _example_file_path("ctl_main.c")
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f"missing Example template: {template_path}")
+    if not os.path.exists(generated_ctl_main_path):
+        raise FileNotFoundError(f"missing generated ctl_main.c: {generated_ctl_main_path}")
+
+    template_text = _read_text(template_path)
+    generated_text = _read_text(generated_ctl_main_path)
+    init_block, binding_block = _extract_ctl_init_sections(generated_text)
+
+    merged = _replace_block_between_markers(template_text, "// Start Controller Init", "// End Controller Init", init_block)
+    if binding_block:
+        merged = _replace_block_between_markers(merged, "// Start Encoder Binding", "// End Encoder Binding", binding_block)
+
+    output_path = os.path.join(output_dir, "ctl_main.c")
+    _write_text(output_path, merged)
+    return output_path
+
+
 def normalize_body(body: str) -> str:
     body = strip_code_fence(body)
     body = body.strip()
@@ -1103,10 +1182,14 @@ def main():
 
         output_dir = args.out_dir or os.path.dirname(os.path.abspath(args.out)) or os.getcwd()
 
+        # Feed the generated control structure back into the Example template for ctl_main.c.
+        merged_ctl_main = merge_example_ctl_main_into_output(output_dir, os.path.join(output_dir, "ctl_main.c"))
+
         # Keep compatibility: write a small manifest into --out.
         manifest = {
             "mode": "project4",
             "files": [os.path.join(output_dir, x) for x in ["ctl_main.h", "ctl_main.c", "user_main.h", "user_main.c"]],
+            "merged_files": [merged_ctl_main],
             "generated_at": datetime.now().isoformat(),
         }
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
