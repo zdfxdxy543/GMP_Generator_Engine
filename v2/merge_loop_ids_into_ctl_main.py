@@ -155,6 +155,18 @@ def build_c_sections(loop_items: List[dict], mech_mode: str) -> tuple[List[str],
 def generate_header(template_text: str, loop_items: List[dict], mech_mode: str) -> str:
     htext = template_text
 
+    # Switch mech header include by mode.
+    if mech_mode == "smc":
+        htext = htext.replace(
+            "#include <ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h>",
+            "#include <ctl/component/motor_control/mechanical_loop/smc_mech_ctrl.h>",
+        )
+    else:
+        htext = htext.replace(
+            "#include <ctl/component/motor_control/mechanical_loop/smc_mech_ctrl.h>",
+            "#include <ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h>",
+        )
+
     # Define Motion Controller section
     if mech_mode == "smc" and has_mech(loop_items):
         htext = replace_define_motion_controller(htext, ["extern ctl_smc_mech_ctrl_t smc_ctrl;\n"])

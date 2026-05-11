@@ -12,7 +12,7 @@
 #include <ctl/component/motor_control/basic/vf_generator.h>
 
 #include <ctl/component/motor_control/current_loop/foc_core.h>
-#include <ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h>
+#include <ctl/component/motor_control/mechanical_loop/smc_mech_ctrl.h>
 #include <ctl/component/motor_control/observer/pmsm_esmo.h>
 
 #include <ctl/framework/cia402_state_machine.h>
