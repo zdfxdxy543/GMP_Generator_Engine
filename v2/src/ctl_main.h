@@ -1,3 +1,14 @@
+/**
+ * @file ctl_main.cpp
+ * @author Javnson (javnson@zju.edu.cn)
+ * @brief
+ * @version 0.1
+ * @date 2024-09-30
+ *
+ * @copyright Copyright GMP(c) 2024
+ *
+ */
+
 #include <xplt.peripheral.h>
 
 //=================================================================================================
@@ -12,7 +23,7 @@
 #include <ctl/component/motor_control/basic/vf_generator.h>
 
 #include <ctl/component/motor_control/current_loop/foc_core.h>
-#include <ctl/component/motor_control/mechanical_loop/smc_mech_ctrl.h>
+#include <ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h>
 #include <ctl/component/motor_control/observer/pmsm_esmo.h>
 
 #include <ctl/framework/cia402_state_machine.h>
@@ -47,10 +58,7 @@ extern spwm_modulator_t spwm;
 
 // controller body: Current controller, Command dispatcher, motion controller
 extern mtr_current_ctrl_t mtr_ctrl;
-
-// Start Define Motion Controller
-extern ctl_smc_mech_ctrl_t smc_ctrl;
-// End Define Motion Controller
+extern ctl_mech_ctrl_t mech_ctrl;
 
 // Observer: SMO, FO, Speed measurement.
 extern ctl_slope_f_pu_controller rg;
@@ -96,14 +104,17 @@ GMP_STATIC_INLINE void ctl_dispatch(void)
         // Calculate Motor Speed
         ctl_step_spd_calc(&spd_enc);
 
-        // Start Motor Control
-        ctl_step_smc_mech_ctrl(&smc_ctrl);
+#if BUILD_LEVEL > 3
+        // motion controller
+        ctl_step_mech_ctrl(&mech_ctrl);
 
-        ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&smc_ctrl));
+        // current command dispatch
+        ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));
 
+#endif
+
+        // motor current controller
         ctl_step_current_controller(&mtr_ctrl);
-
-        // End Motor Control
 
 #ifdef ENABLE_SMO
         ctrl_gt udc_for_smo = ctl_mul(CTL_CTRL_CONST_1_OVER_SQRT3, mtr_ctrl.udc);

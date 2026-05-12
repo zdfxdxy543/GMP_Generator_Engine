@@ -1,8 +1,25 @@
+
+//
+// THIS IS A DEMO SOURCE CODE FOR GMP LIBRARY.
+//
+// User should define your own controller objects,
+// and initilize them.
+//
+// User should implement a ctl loop function, this
+// function would be called every main loop.
+//
+// User should implement a state machine if you are using
+// Controller Nanon framework.
+//
+
 #include <gmp_core.h>
+
 #include <ctrl_settings.h>
+
 #include "ctl_main.h"
-#include "paras.generated.h"
+
 #include <xplt.peripheral.h>
+
 #include <core/pm/function_scheduler.h>
 
 //=================================================================================================
@@ -23,10 +40,8 @@ spwm_modulator_t spwm;
 mtr_current_ctrl_t mtr_ctrl;
 mtr_current_init_t mtr_ctrl_init;
 
-// Start Define Motion Controller
-ctl_smc_mech_ctrl_t smc_ctrl;
-ctl_smc_mech_init_t smc_init;
-// End Define Motion Controller
+ctl_mech_ctrl_t mech_ctrl;
+ctl_mech_ctrl_init_t mech_init;
 
 // Observer: SMO, FO, Speed measurement.
 ctl_slope_f_pu_controller rg;
@@ -62,10 +77,26 @@ void ctl_init()
     //
     ctl_fast_disable_output();
 
-    // Start Controller Init
-    Setup_Motor_Current();
-    Setup_SMC_Mechanical_Controller();
-    // End Controller Init
+    //
+    // motor current controller init objects
+    //
+    mtr_ctrl_init.fs = CONTROLLER_FREQUENCY;
+    mtr_ctrl_init.v_base = CTRL_VOLTAGE_BASE;
+    mtr_ctrl_init.i_base = CTRL_CURRENT_BASE;
+
+    mtr_ctrl_init.v_bus = CTRL_VOLTAGE_BASE;
+    mtr_ctrl_init.v_phase_limit = MOTOR_PARAM_RATED_VOLTAGE;
+
+    mtr_ctrl_init.freq_base = MOTOR_PARAM_RATED_FREQUENCY;
+    mtr_ctrl_init.spd_base = MOTOR_PARAM_MAX_SPEED / 1000;
+    mtr_ctrl_init.pole_pairs = MOTOR_PARAM_POLE_PAIRS;
+
+    mtr_ctrl_init.mtr_Ld = MOTOR_PARAM_LS;
+    mtr_ctrl_init.mtr_Lq = MOTOR_PARAM_LS;
+    mtr_ctrl_init.mtr_Rs = MOTOR_PARAM_RS;
+
+    ctl_auto_tuning_mtr_current_ctrl(&mtr_ctrl_init);
+    ctl_init_mtr_current_ctrl(&mtr_ctrl, &mtr_ctrl_init);
 
     //
     // init SPWM modulator
@@ -92,6 +123,25 @@ void ctl_init()
         CONTROLLER_FREQUENCY);
 
     //
+    // mechanical controller
+    //
+    mech_init.fs = CONTROLLER_FREQUENCY;
+
+    mech_init.pos_kp = 5.0f;
+    mech_init.pos_ki = 1.0f;
+
+    mech_init.vel_kp = 5.0f;
+    mech_init.vel_ki = 1.0f;
+
+    mech_init.speed_limit = 1.0f;
+    mech_init.speed_slope_limit = 1.0f;
+    mech_init.cur_limit = 0.3f;
+
+    mech_init.mech_division = CTRL_MECH_DIV;
+
+    ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
+
+    //
     // Encoder Init
     //
     ctl_init_autoturn_pos_encoder(&pos_enc, mtr_ctrl_init.pole_pairs, CTRL_POS_ENC_FS);
@@ -99,25 +149,47 @@ void ctl_init()
 
     ctl_init_spd_calculator(&spd_enc, &pos_enc.encif, CONTROLLER_FREQUENCY, CTRL_MECH_DIV, MOTOR_PARAM_MAX_SPEED, 20.0f);
 
-    #ifdef ENABLE_SMO
+#ifdef ENABLE_SMO
 
-        //
-        // Observer Init
-        //
-        ctl_autotune_esmo_init_from_mtr(&smo_init, &mtr_ctrl_init, 0.005f);
-        ctl_init_pmsm_esmo(&smo, &smo_init);
+    //
+    // Observer Init
+    //
+    ctl_autotune_esmo_init_from_mtr(&smo_init, &mtr_ctrl_init, 0.005f);
+    ctl_init_pmsm_esmo(&smo, &smo_init);
 
-    #endif // ENABLE_SMO
+#endif // ENABLE_SMO
 
-    // Start Encoder Binding
+// attach motor current controller with input port
+#if BUILD_LEVEL <= 2
+    ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &rg.enc, &spd_enc.encif);
+#else  // BUILD_LEVEL
     ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);
-    ctl_attach_smc_mech_ctrl(&smc_ctrl, &pos_enc.encif, &spd_enc.encif);
-    // End Encoder Binding
+#endif // BUILD_LEVEL
 
-    // Start Enable
+    ctl_attach_mech_ctrl(&mech_ctrl, &pos_enc.encif, &spd_enc.encif);
+
+#if BUILD_LEVEL == 1
+    // Voltage open loop
+    ctl_disable_mtr_current_ctrl(&mtr_ctrl);
+    ctl_set_mtr_current_ctrl_vdq_ref(&mtr_ctrl, 0.0, 0.0);
+
+#elif BUILD_LEVEL == 2
+    // Basic current close loop, IF
     ctl_enable_mtr_current_ctrl(&mtr_ctrl);
-    ctl_enable_smc_mech_ctrl(&smc_ctrl);
-    // End Enable
+    ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, float2ctrl(0.1), float2ctrl(0.1));
+
+#elif BUILD_LEVEL == 3
+    // Basic current close loop, inverter
+    ctl_enable_mtr_current_ctrl(&mtr_ctrl);
+    ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, float2ctrl(0.1), float2ctrl(0.1));
+
+#elif BUILD_LEVEL == 4
+    // Basic Speed close loop
+    ctl_enable_mtr_current_ctrl(&mtr_ctrl);
+    ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_VELOCITY);
+    ctl_set_mech_target_velocity(&mech_ctrl, 0.1);
+
+#endif // BUILD_LEVEL
 
     //
     // init and config CiA402 standard state machine
@@ -306,60 +378,3 @@ fast_gt ctl_exec_adc_calibration(void)
     return 1;
 }
 
-void Setup_Motor_Current()
-{
-    mtr_ctrl_init.fs = CONTROLLER_FREQUENCY;
-    mtr_ctrl_init.v_base = CTRL_VOLTAGE_BASE;
-    mtr_ctrl_init.i_base = CTRL_CURRENT_BASE;
-
-    mtr_ctrl_init.v_bus = CTRL_VOLTAGE_BASE;
-    mtr_ctrl_init.v_phase_limit = MOTOR_PARAM_RATED_VOLTAGE;
-
-    mtr_ctrl_init.freq_base = MOTOR_PARAM_RATED_FREQUENCY;
-    mtr_ctrl_init.spd_base = MOTOR_PARAM_MAX_SPEED / 1000;
-    mtr_ctrl_init.pole_pairs = MOTOR_PARAM_POLE_PAIRS;
-
-    mtr_ctrl_init.mtr_Ld = MOTOR_PARAM_LS;
-    mtr_ctrl_init.mtr_Lq = MOTOR_PARAM_LS;
-    mtr_ctrl_init.mtr_Rs = MOTOR_PARAM_RS;
-
-    ctl_auto_tuning_mtr_current_ctrl(&mtr_ctrl_init);
-    ctl_init_mtr_current_ctrl(&mtr_ctrl, &mtr_ctrl_init);
-}
-
-void Setup_Mechanical_Controller()
-{
-    mech_init.fs = CONTROLLER_FREQUENCY;
-
-    mech_init.pos_kp = POS_KP;
-    mech_init.pos_ki = POS_KI;
-
-    mech_init.vel_kp = VEL_KP;
-    mech_init.vel_ki = VEL_KI;
-
-    mech_init.speed_limit = SPEED_LIMIT;
-    mech_init.speed_slope_limit = SPEED_SLOPE_LIMIT;
-    mech_init.cur_limit = CUR_LIMIT;
-
-    mech_init.mech_division = CTRL_MECH_DIV;
-
-    ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
-}
-
-void Setup_SMC_Mechanical_Controller()
-{
-    smc_init.eta11 = ETA11;
-    smc_init.eta12 = ETA12;
-    smc_init.eta21 = ETA21;
-    smc_init.eta22 = ETA22;
-
-    smc_init.rho = RHO;
-    smc_init.lambda = LAMBDA;
-
-    smc_init.cur_limit = CUR_LIMIT;
-    smc_init.k_ff = K_FF;
-
-    smc_init.mech_division = CTRL_MECH_DIV;
-
-    ctl_init_smc_mech_ctrl(&smc_ctrl, &smc_init);
-}
