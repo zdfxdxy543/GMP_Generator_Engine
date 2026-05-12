@@ -2,6 +2,7 @@
 #include <gmp_core.h>
 #include <ctrl_settings.h>
 #include "ctl_main.h"
+#include "paras.h"
 #include <xplt.peripheral.h>
 #include <core/pm/function_scheduler.h>
 
@@ -26,8 +27,8 @@ mc_foc_init_t mtr_ctrl_init;
 ctl_mech_ctrl_t mech_ctrl;
 ctl_mech_init_t mech_init;
 
-// ctl_smc_mech_ctrl_t smc_ctrl;
-// ctl_smc_mech_init_t smc_init;
+ctl_smc_mech_ctrl_t smc_ctrl;
+ctl_smc_mech_init_t smc_init;
 
 // Observer: SMO, FO, Speed measurement.
 ctl_slope_f_pu_controller rg;
@@ -54,8 +55,8 @@ volatile fast_gt flag_enable_adc_calibrator = 1;
 volatile fast_gt index_adc_calibrator = 0;
 
 void Setup_Motor_Current();
-void Setup_Mechanical_Controller();
-// void Setup_SMC_Mechanical_Controller();
+void Setup_Mechanical_Control();
+void Setup_SMC_Mechanical_Controller();
 
 //=================================================================================================
 // CTL initialize routine
@@ -68,7 +69,8 @@ void ctl_init()
     ctl_fast_disable_output();
 
     // Start Controller Init
-
+    Setup_Motor_Current();
+    Setup_Mechanical_Controller();
     // End Controller Init
 
     //
@@ -114,11 +116,13 @@ void ctl_init()
 #endif // ENABLE_SMO
 
     // Start Encoder Binding
-
+    ctl_attach_foc_core_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);
+    ctl_attach_mech_ctrl(&mech_ctrl, &pos_enc.encif, &spd_enc.encif);
     // End Encoder Binding
 
     // Start Enable
-
+    ctl_enable_foc_core_current_ctrl(&mtr_ctrl);
+    ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_VELOCITY);
     // End Enable
 
     //
@@ -343,8 +347,8 @@ void Setup_Motor_Current()
     mtr_ctrl_init.mtr_Lq = MOTOR_PARAM_LS;
     mtr_ctrl_init.mtr_Rs = MOTOR_PARAM_RS;
 
-    ctl_auto_tuning_foc_core(&mtr_ctrl_init);
-    ctl_init_foc_core(&mtr_ctrl, &mtr_ctrl_init);
+    ctl_auto_tuning_mtr_current_ctrl(&mtr_ctrl_init);
+    ctl_init_mtr_current_ctrl(&mtr_ctrl, &mtr_ctrl_init);
 }
 
 void Setup_Mechanical_Controller()
@@ -366,20 +370,20 @@ void Setup_Mechanical_Controller()
     ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
 }
 
-// void Setup_SMC_Mechanical_Controller()
-// {
-//     smc_init.eta11 = ETA11;
-//     smc_init.eta12 = ETA12;
-//     smc_init.eta21 = ETA21;
-//     smc_init.eta22 = ETA22;
+void Setup_SMC_Mechanical_Controller()
+{
+    smc_init.eta11 = ETA11;
+    smc_init.eta12 = ETA12;
+    smc_init.eta21 = ETA21;
+    smc_init.eta22 = ETA22;
 
-//     smc_init.rho = RHO;
-//     smc_init.lambda = LAMBDA;
+    smc_init.rho = RHO;
+    smc_init.lambda = LAMBDA;
 
-//     smc_init.cur_limit = CUR_LIMIT;
-//     smc_init.k_ff = K_FF;
+    smc_init.cur_limit = CUR_LIMIT;
+    smc_init.k_ff = K_FF;
 
-//     smc_init.mech_division = CTRL_MECH_DIV;
+    smc_init.mech_division = CTRL_MECH_DIV;
 
-//     ctl_init_smc_mech_ctrl(&smc_ctrl, &smc_init);
-// }
+    ctl_init_smc_mech_ctrl(&smc_ctrl, &smc_init);
+}

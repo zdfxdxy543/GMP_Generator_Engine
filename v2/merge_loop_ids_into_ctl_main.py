@@ -59,6 +59,17 @@ def has_current(loop_items: List[dict]) -> bool:
     return any("current" in loop_name(item) or "current" in loop_id(item) for item in loop_items)
 
 
+def current_input_kind(loop_items: List[dict]) -> str:
+    """Return 'simulate_speed' when the current loop should use rg.enc, otherwise 'real_speed'."""
+    for item in loop_items:
+        if not ("current" in loop_name(item) or "current" in loop_id(item)):
+            continue
+        props = loop_props(item)
+        if any("simulate_speed" in p for p in props):
+            return "simulate_speed"
+    return "real_speed"
+
+
 def detect_mech_mode(loop_items: List[dict]) -> str:
     """Return 'smc', 'pid', or 'none'."""
     for item in loop_items:
@@ -126,14 +137,18 @@ def build_c_sections(loop_items: List[dict], mech_mode: str) -> tuple[List[str],
         props = loop_props(item)
         if "current" not in name and "current" not in loop_id(item):
             continue
-        if "simulate_speed" in props:
-            add_unique(init_lines, "    Setup_Motor_Current();\n")
-            add_unique(bind_lines, "    ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &rg.enc, &spd_enc.encif);\n")
-            add_unique(enable_lines, "    ctl_enable_mtr_current_ctrl(&mtr_ctrl);\n")
+        add_unique(init_lines, "    Setup_Motor_Current();\n")
+        if current_input_kind(loop_items) == "simulate_speed":
+            add_unique(
+                bind_lines,
+                "    ctl_attach_foc_core_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &rg.enc, &spd_enc.encif);\n",
+            )
         else:
-            add_unique(init_lines, "    Setup_Motor_Current();\n")
-            add_unique(bind_lines, "    ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);\n")
-            add_unique(enable_lines, "    ctl_enable_mtr_current_ctrl(&mtr_ctrl);\n")
+            add_unique(
+                bind_lines,
+                "    ctl_attach_foc_core_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);\n",
+            )
+        add_unique(enable_lines, "    ctl_enable_foc_core_current_ctrl(&mtr_ctrl);\n")
 
     # mech loop by mode
     if has_mech(loop_items):
@@ -167,12 +182,6 @@ def generate_header(template_text: str, loop_items: List[dict], mech_mode: str) 
             "#include <ctl/component/motor_control/mechanical_loop/basic_mech_ctrl.h>",
         )
 
-    # Define Motion Controller section
-    if mech_mode == "smc" and has_mech(loop_items):
-        htext = replace_define_motion_controller(htext, ["extern ctl_smc_mech_ctrl_t smc_ctrl;\n"])
-    else:
-        htext = replace_define_motion_controller(htext, ["extern ctl_mech_ctrl_t mech_ctrl;\n"])
-
     # Motor Control section: finish mech checks first, then current
     lines: List[str] = []
     indent = "        "
@@ -185,11 +194,11 @@ def generate_header(template_text: str, loop_items: List[dict], mech_mode: str) 
         else:
             lines.append(f"{indent}ctl_step_mech_ctrl(&mech_ctrl);\n")
             lines.append("\n")
-            lines.append(f"{indent}ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));\n")
+            lines.append(f"{indent}ctl_set_foc_core_idq_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));\n")
             lines.append("\n")
 
     if has_current(loop_items):
-        lines.append(f"{indent}ctl_step_current_controller(&mtr_ctrl);\n")
+        lines.append(f"{indent}ctl_step_foc_core(&mtr_ctrl);\n")
         lines.append("\n")
 
     if not lines:
@@ -262,15 +271,7 @@ def main(
     # C generation
     ctext = template_path.read_text(encoding="utf-8")
     if mech_mode == "smc" and has_mech(loops):
-        ctext = replace_define_motion_controller(ctext, [
-            "ctl_smc_mech_ctrl_t smc_ctrl;\n",
-            "ctl_smc_mech_init_t smc_init;\n",
-        ])
-    else:
-        ctext = replace_define_motion_controller(ctext, [
-            "ctl_mech_ctrl_t mech_ctrl;\n",
-            "ctl_mech_ctrl_init_t mech_init;\n",
-        ])
+        pass
 
     init_lines, bind_lines, enable_lines = build_c_sections(loops, mech_mode)
     ctext = replace_section(ctext, "    // Start Controller Init", "    // End Controller Init", init_lines)
@@ -278,7 +279,8 @@ def main(
     ctext = replace_section(ctext, "    // Start Enable", "    // End Enable", enable_lines)
 
     if paras_output_path is not None:
-        ctext = ensure_include_line(ctext, '#include "paras.generated.h"', '#include "ctl_main.h"')
+        paras_include = f'#include "{paras_output_path.name}"'
+        ctext = ensure_include_line(ctext, paras_include, '#include "ctl_main.h"')
     if mech_mode == "pid":
         ctext = apply_pid_macros_to_c(ctext)
 

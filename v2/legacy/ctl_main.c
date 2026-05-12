@@ -1,4 +1,3 @@
-
 #include <gmp_core.h>
 #include <ctrl_settings.h>
 #include "ctl_main.h"
@@ -20,14 +19,13 @@ spwm_modulator_t spwm;
 #endif // USING_NPC_MODULATOR
 
 // controller body: Current controller, Command dispatcher, motion controller
-mc_foc_core_t mtr_ctrl;
-mc_foc_init_t mtr_ctrl_init;
+mtr_current_ctrl_t mtr_ctrl;
+mtr_current_init_t mtr_ctrl_init;
 
+// Start Define Motion Controller
 ctl_mech_ctrl_t mech_ctrl;
-ctl_mech_init_t mech_init;
-
-// ctl_smc_mech_ctrl_t smc_ctrl;
-// ctl_smc_mech_init_t smc_init;
+ctl_mech_ctrl_init_t mech_init;
+// End Define Motion Controller
 
 // Observer: SMO, FO, Speed measurement.
 ctl_slope_f_pu_controller rg;
@@ -52,10 +50,6 @@ adc_bias_calibrator_t adc_calibrator;
 volatile fast_gt flag_enable_adc_calibrator = 1;
 //volatile fast_gt flag_enable_adc_calibrator = 0;
 volatile fast_gt index_adc_calibrator = 0;
-
-void Setup_Motor_Current();
-void Setup_Mechanical_Controller();
-// void Setup_SMC_Mechanical_Controller();
 
 //=================================================================================================
 // CTL initialize routine
@@ -103,15 +97,15 @@ void ctl_init()
 
     ctl_init_spd_calculator(&spd_enc, &pos_enc.encif, CONTROLLER_FREQUENCY, CTRL_MECH_DIV, MOTOR_PARAM_MAX_SPEED, 20.0f);
 
-#ifdef ENABLE_SMO
+    #ifdef ENABLE_SMO
 
-    //
-    // Observer Init
-    //
-    ctl_autotune_esmo_init_from_mtr(&smo_init, &mtr_ctrl_init, 0.005f);
-    ctl_init_pmsm_esmo(&smo, &smo_init);
+        //
+        // Observer Init
+        //
+        ctl_autotune_esmo_init_from_mtr(&smo_init, &mtr_ctrl_init, 0.005f);
+        ctl_init_pmsm_esmo(&smo, &smo_init);
 
-#endif // ENABLE_SMO
+    #endif // ENABLE_SMO
 
     // Start Encoder Binding
 
@@ -203,7 +197,7 @@ void ctl_disable_pwm()
 
 void clear_all_controllers()
 {
-    ctl_clear_foc_core(&mtr_ctrl);
+    ctl_clear_mtr_current_ctrl(&mtr_ctrl);
     ctl_clear_mech_ctrl(&mech_ctrl);
     ctl_clear_slope_f_pu(&rg);
 
@@ -308,24 +302,6 @@ fast_gt ctl_exec_adc_calibration(void)
     return 1;
 }
 
-void gmp_pil_sim_step(const gmp_sim_rx_buf_t* rx, gmp_sim_tx_buf_t* tx)
-{
-#if defined ENBALE_GMP_DL_PIL_SIM
-    ctl_input_callback_pil(rx);
-
-    ctl_dispatch();
-
-    ctl_output_callback_pil(tx);
-#endif // defined ENBALE_GMP_DL_PIL_SIM
-}
-
-#if defined ENBALE_GMP_DL_PIL_SIM
-time_gt gmp_base_get_ctrl_tick(void)
-{
-    return mtr_ctrl.isr_tick/((uint32_t)CONTROLLER_FREQUENCY/1000);
-}
-#endif // defined ENBALE_GMP_DL_PIL_SIM
-
 void Setup_Motor_Current()
 {
     mtr_ctrl_init.fs = CONTROLLER_FREQUENCY;
@@ -343,8 +319,8 @@ void Setup_Motor_Current()
     mtr_ctrl_init.mtr_Lq = MOTOR_PARAM_LS;
     mtr_ctrl_init.mtr_Rs = MOTOR_PARAM_RS;
 
-    ctl_auto_tuning_foc_core(&mtr_ctrl_init);
-    ctl_init_foc_core(&mtr_ctrl, &mtr_ctrl_init);
+    ctl_auto_tuning_mtr_current_ctrl(&mtr_ctrl_init);
+    ctl_init_mtr_current_ctrl(&mtr_ctrl, &mtr_ctrl_init);
 }
 
 void Setup_Mechanical_Controller()
@@ -366,20 +342,20 @@ void Setup_Mechanical_Controller()
     ctl_init_mech_ctrl(&mech_ctrl, &mech_init);
 }
 
-// void Setup_SMC_Mechanical_Controller()
-// {
-//     smc_init.eta11 = ETA11;
-//     smc_init.eta12 = ETA12;
-//     smc_init.eta21 = ETA21;
-//     smc_init.eta22 = ETA22;
+void Setup_SMC_Mechanical_Controller()
+{
+    smc_init.eta11 = ETA11;
+    smc_init.eta12 = ETA12;
+    smc_init.eta21 = ETA21;
+    smc_init.eta22 = ETA22;
 
-//     smc_init.rho = RHO;
-//     smc_init.lambda = LAMBDA;
+    smc_init.rho = RHO;
+    smc_init.lambda = LAMBDA;
 
-//     smc_init.cur_limit = CUR_LIMIT;
-//     smc_init.k_ff = K_FF;
+    smc_init.cur_limit = CUR_LIMIT;
+    smc_init.k_ff = K_FF;
 
-//     smc_init.mech_division = CTRL_MECH_DIV;
+    smc_init.mech_division = CTRL_MECH_DIV;
 
-//     ctl_init_smc_mech_ctrl(&smc_ctrl, &smc_init);
-// }
+    ctl_init_smc_mech_ctrl(&smc_ctrl, &smc_init);
+}

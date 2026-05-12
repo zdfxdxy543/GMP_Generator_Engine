@@ -1,14 +1,9 @@
 当id包含mech而且属性包含smc时：
     对于.c文件：
-        将Define Motion Controller的内容修改为：
-            ctl_smc_mech_ctrl_t smc_ctrl;
-            ctl_smc_mech_init_t smc_init;
         在Control Init区中插入"Setup_SMC_Mechanical_Controller()"，
         在Encoder Binding区插入"ctl_attach_smc_mech_ctrl(&smc_ctrl, &pos_enc.encif, &spd_enc.encif);"，
         在Enable区中插入"ctl_enable_smc_mech_ctrl(&smc_ctrl);"
     对于.h文件：
-        将Define Motion Controller的内容修改为：
-            extern ctl_smc_mech_ctrl_t smc_ctrl;
         在Motor Control区中插入"ctl_step_smc_mech_ctrl(&smc_ctrl);"，
         在Motor Control区插入"ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&smc_ctrl));"
     对于paras.h文件：

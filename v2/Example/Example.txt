@@ -1,12 +1,12 @@
 当id包含current而且属性为real_speed时：
     在Control Init区中插入"Setup_Motor_Current()"，
-    在Encoder Binding区插入"ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);"，
-    在Enable区中插入"ctl_enable_mtr_current_ctrl(&mtr_ctrl);"
+    在Encoder Binding区插入"ctl_attach_foc_core_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &pos_enc.encif, &spd_enc.encif);"，
+    在Enable区中插入"ctl_enable_foc_core_current_ctrl(&mtr_ctrl);"
 
 当id包含current而且属性为simulate_speed时：
     在Control Init区中插入"Setup_Motor_Current()"，
-    在Encoder Binding区插入"ctl_attach_mtr_current_ctrl_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &rg.enc, &spd_enc.encif);"，
-    在Enable区中插入"ctl_enable_mtr_current_ctrl(&mtr_ctrl);"
+    在Encoder Binding区插入"ctl_attach_foc_core_port(&mtr_ctrl, &iuvw.control_port, &udc.control_port, &rg.enc, &spd_enc.encif);"，
+    在Enable区中插入"ctl_enable_foc_core_current_ctrl(&mtr_ctrl);"
 
 当id包含mech而且属性为speed时：
     在Control Init区中插入"Setup_Mechanical_Controller()"，

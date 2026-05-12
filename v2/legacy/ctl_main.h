@@ -17,8 +17,6 @@
 
 #include <ctl/framework/cia402_state_machine.h>
 
-#include <core/dev/pil_core.h>
-
 #ifndef _FILE_CTL_MAIN_H_
 #define _FILE_CTL_MAIN_H_
 
@@ -48,10 +46,11 @@ extern spwm_modulator_t spwm;
 #endif // USING_NPC_MODULATOR
 
 // controller body: Current controller, Command dispatcher, motion controller
-extern mc_foc_core_t mtr_ctrl;
-extern ctl_mech_ctrl_t mech_ctrl;
+extern mtr_current_ctrl_t mtr_ctrl;
 
-// extern ctl_smc_mech_ctrl_t smc_ctrl;
+// Start Define Motion Controller
+extern ctl_mech_ctrl_t mech_ctrl;
+// End Define Motion Controller
 
 // Observer: SMO, FO, Speed measurement.
 extern ctl_slope_f_pu_controller rg;

@@ -1,6 +1,6 @@
 当id包含mech时：
     在Motor Control区中插入"ctl_step_mech_ctrl(&mech_ctrl);"，
-    在Motor Control区插入"ctl_set_mtr_current_ctrl_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));"
+    在Motor Control区插入"ctl_set_foc_core_idq_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));"
 
 当id包含current时：
-    在Motor Control区中插入"ctl_step_current_controller(&mtr_ctrl);"
+    在Motor Control区中插入"ctl_step_foc_core(&mtr_ctrl);"

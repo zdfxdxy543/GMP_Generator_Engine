@@ -51,7 +51,7 @@ extern spwm_modulator_t spwm;
 extern mc_foc_core_t mtr_ctrl;
 extern ctl_mech_ctrl_t mech_ctrl;
 
-// extern ctl_smc_mech_ctrl_t smc_ctrl;
+extern ctl_smc_mech_ctrl_t smc_ctrl;
 
 // Observer: SMO, FO, Speed measurement.
 extern ctl_slope_f_pu_controller rg;
@@ -98,6 +98,11 @@ GMP_STATIC_INLINE void ctl_dispatch(void)
         ctl_step_spd_calc(&spd_enc);
 
         // Start Motor Control
+        ctl_step_mech_ctrl(&mech_ctrl);
+
+        ctl_set_foc_core_idq_ref(&mtr_ctrl, 0, ctl_get_mech_cmd(&mech_ctrl));
+
+        ctl_step_foc_core(&mtr_ctrl);
 
         // End Motor Control
 

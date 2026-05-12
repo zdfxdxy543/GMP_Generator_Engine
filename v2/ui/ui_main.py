@@ -31,12 +31,19 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPointF, QRectF
 from PyQt5.QtGui import QColor, QPainter, QPen, QPolygonF, QFont
 import json
 import os
-import subprocess
 import shutil
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+import csv
+
+V2_ROOT = Path(__file__).resolve().parent.parent
+if str(V2_ROOT) not in sys.path:
+    sys.path.insert(0, str(V2_ROOT))
+
+import controller_loop_id_exporter as loop_exporter
+import merge_loop_ids_into_ctl_main as merger
 
 
 class SettingsDialog(QDialog):
@@ -132,16 +139,8 @@ class NewProjectDialog(QDialog):
         main_layout = QVBoxLayout(self)
         form_layout = QFormLayout()
 
-        storage_row = QWidget()
-        storage_layout = QHBoxLayout(storage_row)
-        storage_layout.setContentsMargins(0, 0, 0, 0)
-        storage_layout.setSpacing(6)
-        self.storage_edit = QLineEdit()
-        self.storage_edit.setPlaceholderText('请选择项目存储路径')
-        storage_btn = QPushButton('浏览...')
-        storage_btn.clicked.connect(self.choose_storage_path)
-        storage_layout.addWidget(self.storage_edit)
-        storage_layout.addWidget(storage_btn)
+        self.fixed_path_label = QLabel(self._get_project_parent_display_path())
+        self.fixed_path_label.setWordWrap(True)
 
         self.project_name_edit = QLineEdit()
         self.project_name_edit.setPlaceholderText('请输入项目名')
@@ -150,7 +149,7 @@ class NewProjectDialog(QDialog):
         self.max_iter_spin.setRange(1, 9999)
         self.max_iter_spin.setValue(5)
 
-        form_layout.addRow('存储路径', storage_row)
+        form_layout.addRow('固定路径', self.fixed_path_label)
         form_layout.addRow('项目名', self.project_name_edit)
         form_layout.addRow('最大迭代次数', self.max_iter_spin)
 
@@ -164,17 +163,28 @@ class NewProjectDialog(QDialog):
         self.project_root = None
         self.project_json_path = None
 
-    def choose_storage_path(self):
-        folder = QFileDialog.getExistingDirectory(self, '选择项目存储路径')
-        if folder:
-            self.storage_edit.setText(folder)
-
     def _read_gmp_root(self):
         if not self._config_path.exists():
             return ''
         with open(self._config_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return str(data.get('gmp_root', '')).strip()
+
+    def _get_project_parent_path(self):
+        gmp_root = self._read_gmp_root()
+        if not gmp_root:
+            return None
+        return Path(gmp_root) / 'ctl' / 'suite'
+
+    def _get_project_parent_display_path(self):
+        project_parent = self._get_project_parent_path()
+        return str(project_parent) if project_parent else '未配置 GMP 根目录'
+
+    def _get_template_project_path(self):
+        project_parent = self._get_project_parent_path()
+        if not project_parent:
+            return None
+        return project_parent / 'mcs_pmsm_nt'
 
     def _build_project_data(self, project_root):
         return {
@@ -183,18 +193,20 @@ class NewProjectDialog(QDialog):
             'simulink_model_path': str(project_root / 'simulink_model.slx'),
             'src_folder_path': str(project_root / 'src'),
             'iteration_parameter_header_path': str(project_root / 'paras.h'),
-            'user_prompt': '',
+            'objective_text': '',
             'task_type': '',
             'max_iterations': int(self.max_iter_spin.value()),
-            'performance_requirements': '',
+            'structured_requirement': {
+                'performance_requirements': '',
+                'selected_loops': [],
+            },
         }
 
     def on_accept(self):
-        storage_path_text = self.storage_edit.text().strip()
         project_name = self.project_name_edit.text().strip()
 
-        if not storage_path_text or not project_name:
-            QMessageBox.warning(self, '提示', '请先填写项目存储路径和项目名。')
+        if not project_name:
+            QMessageBox.warning(self, '提示', '请先填写项目名。')
             return
 
         gmp_root = self._read_gmp_root()
@@ -202,29 +214,28 @@ class NewProjectDialog(QDialog):
             QMessageBox.warning(self, '提示', '请先在“设置”中配置 GMP 根目录。')
             return
 
-        project_parent = Path(storage_path_text)
+        project_parent = self._get_project_parent_path()
+        if project_parent is None:
+            QMessageBox.warning(self, '提示', '无法确定项目固定路径。')
+            return
+
         project_root = project_parent / project_name
         if project_root.exists():
             QMessageBox.warning(self, '提示', f'项目目录已存在：{project_root}')
             return
 
-        # Design2 expects the source assets to live directly under v2.
-        source_root = Path(__file__).resolve().parent.parent
-        source_simulink = source_root / 'simulink_model.slx'
-        source_src = source_root / 'src'
-
-        if not source_simulink.exists() or not source_src.exists():
+        template_root = self._get_template_project_path()
+        if template_root is None or not template_root.exists():
             QMessageBox.warning(
                 self,
                 '提示',
-                'v2 根目录下缺少 simulink_model.slx 或 src 文件夹，无法创建项目。',
+                f'模板文件夹不存在：{template_root}',
             )
             return
 
         try:
-            project_root.mkdir(parents=True, exist_ok=False)
-            shutil.copy2(source_simulink, project_root / 'simulink_model.slx')
-            shutil.copytree(source_src, project_root / 'src')
+            project_parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(template_root, project_root)
 
             project_data = self._build_project_data(project_root)
             self.project_json_path = project_root / f'{project_name}.json'
@@ -417,7 +428,7 @@ class ChatStreamWidget(QWidget):
                 bubble.setFixedWidth(system_width)
 
 
-def call_ui_chat_model(user_prompt: str, system_prompt: str) -> str:
+def call_ui_chat_model(user_prompt: str, system_prompt: str, temperature: float | None = None) -> str:
     settings = read_ui_settings()
     api_key = resolve_ui_api_key(settings)
     if not api_key:
@@ -428,7 +439,7 @@ def call_ui_chat_model(user_prompt: str, system_prompt: str) -> str:
     url = base_url.rstrip('/') + '/chat/completions'
     payload = {
         'model': model,
-        'temperature': 0.2,
+        'temperature': float(temperature if temperature is not None else 0.2),
         'messages': [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt},
@@ -655,7 +666,7 @@ class ControllerStructurePanel(QWidget):
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 if isinstance(data, dict):
-                    selected = data.get('selected_loops')
+                    selected = data.get('selected_loops') or data.get('structured_requirement', {}).get('selected_loops')
                     if isinstance(selected, list) and selected:
                         return data, path
             except Exception:
@@ -674,7 +685,7 @@ class ControllerStructurePanel(QWidget):
         if not payload:
             return {'items': [], 'mech_props': [], 'source': ''}
 
-        loops = payload.get('selected_loops') or []
+        loops = payload.get('selected_loops') or payload.get('structured_requirement', {}).get('selected_loops') or []
         by_name = {str(loop.get('name') or '').strip().lower(): loop for loop in loops if isinstance(loop, dict)}
 
         mech_loop = by_name.get('mech_loop')
@@ -794,6 +805,27 @@ class CurveCanvas(QFrame):
             max_x = min_x + 1.0
         if abs(max_y - min_y) < 1e-9:
             max_y = min_y + 1.0
+
+        num_ticks = 6
+        painter.setPen(QColor('#666666'))
+        f = painter.font()
+        f.setPointSize(8)
+        painter.setFont(f)
+
+        for i in range(num_ticks):
+            tval = min_x + i * (max_x - min_x) / (num_ticks - 1)
+            tx = plot_rect.left() + (tval - min_x) / (max_x - min_x) * plot_rect.width()
+            painter.drawLine(int(tx), int(plot_rect.bottom()), int(tx), int(plot_rect.bottom() + 6))
+            txt = ('%g' % (round(tval, 6)))
+            painter.drawText(QRectF(tx - 36, plot_rect.bottom() + 6, 72, 16), Qt.AlignCenter, txt)
+
+        for i in range(num_ticks):
+            yval = min_y + i * (max_y - min_y) / (num_ticks - 1)
+            y_ratio = (yval - min_y) / (max_y - min_y)
+            py = plot_rect.bottom() - y_ratio * plot_rect.height()
+            painter.drawLine(int(plot_rect.left() - 6), int(py), int(plot_rect.left()), int(py))
+            ytxt = ('%g' % (round(yval, 6)))
+            painter.drawText(QRectF(rect.left(), py - 8, 40, 16), Qt.AlignRight | Qt.AlignVCenter, ytxt)
 
         def map_point(x_val, y_val):
             x_ratio = (x_val - min_x) / (max_x - min_x)
@@ -934,7 +966,7 @@ class MainProgramPanel(QWidget):
                 data = json.load(f)
             if not isinstance(data, dict):
                 data = {}
-            data['user_prompt'] = requirement_text
+            data['objective_text'] = requirement_text
             with open(project_json, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             self._append_chat('system', f'已写入需求到项目文件 {project_json.name}')
@@ -956,7 +988,9 @@ class MainProgramPanel(QWidget):
             if not isinstance(project_data, dict):
                 project_data = {}
 
-            project_data['selected_loops'] = loops_payload.get('selected_loops') or []
+            if 'structured_requirement' not in project_data:
+                project_data['structured_requirement'] = {}
+            project_data['structured_requirement']['selected_loops'] = loops_payload.get('selected_loops') or []
             project_data['generated_loop_ids_path'] = str(loop_ids_path)
 
             with open(project_json, 'w', encoding='utf-8') as f:
@@ -988,59 +1022,62 @@ class MainProgramPanel(QWidget):
         project_json = self._project_json_path()
         output_root = project_json.parent if project_json else script_path.parent
         loop_ids_output = output_root / 'controller_loop_ids_generated.json'
-        c_output = output_root / 'ctl_main.generated.c'
-        h_output = output_root / 'ctl_main.generated.h'
+        c_output = output_root / 'ctl_main.c'
+        h_output = output_root / 'ctl_main.h'
         paras_output = output_root / 'paras.generated.h'
+        llm_config = script_path.parent / 'llm_settings.json'
+        project_src_dir = (project_json.parent / 'src') if project_json else None
 
-        self.status_label.setText('状态：正在调用生成脚本...')
-        self._append_chat('system', '开始调用 v2/run_llm_to_program.py 生成控制器程序。')
+        self.status_label.setText('状态：正在生成程序...')
+        self._append_chat('system', '开始生成控制器程序（复用交互界面同一大模型调用）。')
         self._append_chat('system', f'输出目录 {output_root}')
 
         try:
-            process = subprocess.run(
-                [
-                    sys.executable,
-                    str(script_path),
-                    self.current_requirement,
-                    '--loop-ids-output',
-                    str(loop_ids_output),
-                    '--c-output',
-                    str(c_output),
-                    '--h-output',
-                    str(h_output),
-                    '--paras-output',
-                    str(paras_output),
-                ],
-                cwd=str(script_path.parent),
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
+            self._append_chat('system', '[1/2] 生成 loop-ids...')
+            loop_exporter.export_json(
+                output_path=loop_ids_output,
+                requirement=self.current_requirement,
+                settings_path=llm_config,
+                chat_text_caller=lambda system_prompt, user_prompt, temp: call_ui_chat_model(
+                    user_prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    temperature=temp,
+                ),
             )
-            if process.stdout:
-                self._append_chat('system', '脚本输出')
-                self._append_chat('system', process.stdout.strip())
-            if process.stderr:
-                self._append_chat('system', '错误输出')
-                self._append_chat('system', process.stderr.strip())
+            self._append_chat('system', f'loop-ids 已生成：{loop_ids_output.name}')
 
-            if process.returncode == 0:
-                self.status_label.setText('状态：生成完成')
-                self._append_chat('system', '控制器程序生成完成。')
-                self._update_project_json_selected_loops(loop_ids_output)
-                if callable(self.structure_refresh_callback):
-                    self.structure_refresh_callback()
-            else:
-                self.status_label.setText(f'状态：生成失败，返回码 {process.returncode}')
-                self._append_chat('system', f'脚本执行失败，返回码 {process.returncode}。')
+            self._append_chat('system', '[2/2] 生成 ctl_main 与 paras 代码文件...')
+            merger.main(
+                loop_ids_path=loop_ids_output,
+                template_path=script_path.parent.joinpath('Example', 'ctl_main.c'),
+                output_path=c_output,
+                header_template_path=script_path.parent.joinpath('Example', 'ctl_main.h'),
+                header_output_path=h_output,
+                paras_template_path=script_path.parent.joinpath('Example', 'paras.h'),
+                paras_output_path=paras_output,
+            )
+
+            if project_src_dir is not None:
+                project_src_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(c_output, project_src_dir / c_output.name)
+                shutil.copy2(h_output, project_src_dir / h_output.name)
+                shutil.copy2(paras_output, project_src_dir / paras_output.name)
+                self._append_chat('system', f'已覆盖拷贝到项目源码目录：{project_src_dir}')
+
+            self.status_label.setText('状态：生成完成')
+            self._append_chat('system', '控制器程序生成完成。')
+            self._update_project_json_selected_loops(loop_ids_output)
+            if callable(self.structure_refresh_callback):
+                self.structure_refresh_callback()
         except Exception as exc:
             self.status_label.setText('状态：调用失败')
-            self._append_chat('system', f'调用脚本时发生异常：{exc}')
+            self._append_chat('system', f'生成过程中发生异常：{exc}')
 
 
 class LoadCurvePanel(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, project_json_getter=None, parent=None):
         super().__init__(parent)
+        self.project_json_getter = project_json_getter
         self._updating_table = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1062,6 +1099,17 @@ class LoadCurvePanel(QWidget):
         layout.addWidget(self.chart_canvas, 2)
         layout.addWidget(self.chart_hint)
         layout.addWidget(self.table, 1)
+
+        # bottom row with save button aligned to bottom-right of the table
+        btn_row = QWidget()
+        btn_layout = QHBoxLayout(btn_row)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.addStretch()
+        self.save_btn = QPushButton('保存')
+        self.save_btn.setObjectName('secondaryActionButton')
+        self.save_btn.clicked.connect(self.save_to_csv)
+        btn_layout.addWidget(self.save_btn)
+        layout.addWidget(btn_row)
 
     def ensure_trailing_row(self, item):
         if self._updating_table:
@@ -1109,6 +1157,34 @@ class LoadCurvePanel(QWidget):
                 continue
             points.append((x_val, y_val))
         return points
+
+    def _project_folder(self):
+        if callable(self.project_json_getter):
+            pj = self.project_json_getter()
+            if pj:
+                try:
+                    return Path(pj).parent
+                except Exception:
+                    pass
+        # fallback to app root
+        return Path(__file__).resolve().parent.parent
+
+    def save_to_csv(self):
+        points = self.collect_points()
+        if not points:
+            QMessageBox.warning(self, '提示', '没有可保存的数据。')
+            return
+        out_dir = self._project_folder()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / 'load.csv'
+        try:
+            with open(out_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                for x, y in points:
+                    writer.writerow([x, y])
+            QMessageBox.information(self, '完成', f'已保存：{out_path}')
+        except Exception as exc:
+            QMessageBox.critical(self, '错误', f'保存失败：{exc}')
 
 
 class RequirementPanel(QWidget):
@@ -1214,7 +1290,9 @@ class RequirementPanel(QWidget):
                 data = json.load(f)
             if not isinstance(data, dict):
                 data = {}
-            data['performance_requirements'] = requirement_text
+            if 'structured_requirement' not in data:
+                data['structured_requirement'] = {}
+            data['structured_requirement']['performance_requirements'] = requirement_text
             with open(project_json, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             self._append_chat('system', f'已写入需求指标到项目文件 {project_json.name}')
@@ -1248,7 +1326,7 @@ class Design3RightPanel(QWidget):
             structure_refresh_callback=self.refresh_structure,
         )
         self.tabs.addTab(self.main_program_panel, '主程序生成')
-        self.tabs.addTab(LoadCurvePanel(), '负载曲线设置')
+        self.tabs.addTab(LoadCurvePanel(project_json_getter=project_json_getter), '负载曲线设置')
         self.tabs.addTab(RequirementPanel(project_json_getter=project_json_getter), '需求指标设置')
 
         layout.addWidget(self.tabs)

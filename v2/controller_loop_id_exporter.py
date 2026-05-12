@@ -15,7 +15,7 @@ import re
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 try:
     import winreg
@@ -411,7 +411,11 @@ def _normalize_mechanical_loops(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def select_loops(requirement: str, settings: dict[str, Any]) -> dict[str, Any]:
+def select_loops(
+    requirement: str,
+    settings: dict[str, Any],
+    chat_text_caller: Callable[[str, str, float], str] | None = None,
+) -> dict[str, Any]:
     api_key = resolve_api_key(settings)
     if not api_key:
         raise RuntimeError("missing API key in llm settings or environment")
@@ -422,17 +426,20 @@ def select_loops(requirement: str, settings: dict[str, Any]) -> dict[str, Any]:
     model = str(settings.get("model") or DEFAULT_SETTINGS["model"])
     base_url = str(settings.get("base_url") or DEFAULT_SETTINGS["base_url"])
 
-    response_json = call_chat(
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
-        system_prompt=system_prompt,
-        user_prompt=build_user_prompt(requirement),
-        temperature=temperature,
-        timeout=timeout,
-    )
-
-    text = extract_text(response_json)
+    user_prompt = build_user_prompt(requirement)
+    if chat_text_caller is not None:
+        text = str(chat_text_caller(system_prompt, user_prompt, temperature) or "")
+    else:
+        response_json = call_chat(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            timeout=timeout,
+        )
+        text = extract_text(response_json)
     if not text.strip():
         raise RuntimeError("empty model response")
 
@@ -443,9 +450,14 @@ def select_loops(requirement: str, settings: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def export_json(output_path: Path, requirement: str, settings_path: str | Path | None = None) -> Path:
+def export_json(
+    output_path: Path,
+    requirement: str,
+    settings_path: str | Path | None = None,
+    chat_text_caller: Callable[[str, str, float], str] | None = None,
+) -> Path:
     settings = read_llm_settings(settings_path)
-    payload = select_loops(requirement, settings)
+    payload = select_loops(requirement, settings, chat_text_caller=chat_text_caller)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return output_path

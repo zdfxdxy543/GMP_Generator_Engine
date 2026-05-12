@@ -1,6 +1,6 @@
 {
   "gmp_root": "E:/Related_Github_Project/gmp_pro",
-  "api_key": "sk-rsnemaycaqwyhavvfadjitooeumidamzowmdmuqryxdfymol",
-  "model_name": "deepseek-ai/DeepSeek-V4-Flash",
+  "api_key": "sk-",
+  "model_name": "deepseek-ai/DeepSeek-V3.2",
   "model_url": "https://api.siliconflow.cn/v1"
 }
