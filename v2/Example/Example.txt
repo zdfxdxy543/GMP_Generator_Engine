@@ -12,6 +12,7 @@
     在Control Init区中插入"Setup_Mechanical_Controller()"，
     在Encoder Binding区插入"ctl_attach_mech_ctrl(&mech_ctrl, &pos_enc.encif, &spd_enc.encif);"，
     在Enable区中插入"ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_VELOCITY);"
+    在Enable区中插入"ctl_set_mech_target_velocity(&mech_ctrl, 0.1);"
 
 当id包含mech而且属性为position时：
     在Control Init区中插入"Setup_Mechanical_Controller()"，

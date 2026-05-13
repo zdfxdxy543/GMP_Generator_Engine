@@ -161,6 +161,7 @@ def build_c_sections(loop_items: List[dict], mech_mode: str) -> tuple[List[str],
             add_unique(bind_lines, "    ctl_attach_mech_ctrl(&mech_ctrl, &pos_enc.encif, &spd_enc.encif);\n")
             if mech_control_kind(loop_items) == "speed":
                 add_unique(enable_lines, "    ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_VELOCITY);\n")
+                add_unique(enable_lines, "    ctl_set_mech_target_velocity(&mech_ctrl, 0.1);\n")
             else:
                 add_unique(enable_lines, "    ctl_set_mech_ctrl_mode(&mech_ctrl, MECH_MODE_POSITION);\n")
 
