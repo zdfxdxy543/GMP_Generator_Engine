@@ -1,0 +1,140 @@
+{
+  "gmp_path": "<gmp_root>",
+  "sln_path": "<sln_path>",
+  "simulink_model_path": "<simulink_model_path>",
+  "src_folder_path": "<src_folder_path>",
+  "iteration_parameter_header_path": "<iteration_parameter_header_path>",
+  "objective_text": "<在程序生成页面用户输入的设计需求文本>",
+  "task_type": "constant_motor_control",
+  "max_iterations": 5,
+  "objective": "评价 PMSM 在速度控制任务中的性能。用户要求<精简后的用户需求指标，例如'转速稳定在 314.16 rad/s，速度超调量不超过 10%，调节时间不超过 0.2 s，稳态误差不超过 5%。同时观察转矩纹波和 q 轴电流纹波。'>",
+  "available_signals": [
+    // 此处列出所有可用的信号，大模型自动根据object中用户需求指标来选择需要被调用观察的信号，允许的信号包括：
+    // "rotor_angle_rad",
+    // "rotor_speed_rad_s",
+    // "electromagnetic_torque_nm",
+    // "stator_iq_a",
+    // "stator_id_a"
+  ],
+  "signals": {
+    "rotor_speed_rad_s": "rotor_speed_rad_s",
+    "electromagnetic_torque_nm": "electromagnetic_torque_nm",
+    "stator_iq_a": "stator_iq_a",
+    "stator_id_a": "stator_id_a"
+  },
+  "targets": {
+    // 此处将用户需求指标转换为目标值，大模型自动根据目标值来设计控制器
+    // 在表示时需要按照以下的格式：以下是一个示例，大模型需要按照示例从object中提取用户需求指标，将其转换为目标值
+    "rotor_speed_rad_s": {
+      "target_value": 314.16,
+      "unit": "rad/s",
+      "description": "期望稳定转速"
+    },
+    "electromagnetic_torque_nm": {
+      "target_value": 0.2,
+      "unit": "N*m",
+      "description": "期望稳定转矩；如果用户没有明确要求，可不填"
+    },
+    "stator_iq_a": {
+      "target_value": 3.0,
+      "unit": "A",
+      "description": "期望 q 轴电流；如果用户没有明确要求，可不填"
+    },
+    "stator_id_a": {
+      "target_value": 0.0,
+      "unit": "A",
+      "description": "通常 PMSM 的 Id 目标为 0"
+    }
+  },
+  "events": {
+    // 如果object中有相关的内容则需要在events中指定时间点，否则留空
+    "start_time_s": 0.7,
+    "load_step_time_s": 1.0
+  },
+  "metrics": [
+    // 此处列出所有可用的指标，大模型自动根据object中用户需求指标来选择需要被调用观察的指标，允许的指标包括：
+    {
+      "result_name": "speed_overshoot",
+      "metric_name": "overshoot",
+      "signal": "rotor_speed_rad_s",
+      "target_value": 314.16,
+      "weight": 0.25,
+      "optimization_direction": "minimize",
+      "normalize": true,
+      "good_threshold": 0.10,
+      "bad_threshold": 0.30,
+      "description": "速度超调量，归一化后 0.10 表示 10%"
+    },
+    {
+      "result_name": "speed_settling_time",
+      "metric_name": "settling_time",
+      "signal": "rotor_speed_rad_s",
+      "target_value": 314.16,
+      "weight": 0.25,
+      "optimization_direction": "minimize",
+      "tolerance_ratio": 0.05,
+      "good_threshold": 0.20,
+      "bad_threshold": 1.00,
+      "description": "速度调节时间，进入并保持在目标值 ±5% 范围内所需时间"
+    },
+    {
+      "result_name": "speed_steady_state_error",
+      "metric_name": "steady_state_error",
+      "signal": "rotor_speed_rad_s",
+      "target_value": 314.16,
+      "weight": 0.20,
+      "optimization_direction": "minimize",
+      "window": 0.10,
+      "good_threshold": 15.708,
+      "bad_threshold": 62.832,
+      "description": "速度稳态误差，末尾 10% 数据窗口内的平均绝对误差；15.708 rad/s 等于 314.16 的 5%"
+    },
+    {
+      "result_name": "torque_ripple",
+      "metric_name": "ripple",
+      "signal": "electromagnetic_torque_nm",
+      "weight": 0.15,
+      "optimization_direction": "minimize",
+      "window": 0.10,
+      "good_threshold": 0.02,
+      "bad_threshold": 0.20,
+      "description": "转矩稳态纹波，末尾 10% 数据窗口内的峰峰值"
+    },
+    {
+      "result_name": "iq_ripple",
+      "metric_name": "ripple",
+      "signal": "stator_iq_a",
+      "weight": 0.15,
+      "optimization_direction": "minimize",
+      "window": 0.10,
+      "good_threshold": 0.05,
+      "bad_threshold": 0.50,
+      "description": "Iq 电流稳态纹波，末尾 10% 数据窗口内的峰峰值"
+    }
+  ],
+  "tuning_policy": {
+    "allowed_parameters": {
+      "VEL_KP": {
+        "min": 0.1,
+        "max": 20.0,
+        "description": "速度环比例增益"
+      },
+      "VEL_KI": {
+        "min": 0.0,
+        "max": 5.0,
+        "description": "速度环积分增益"
+      },
+      "CUR_LIMIT": {
+        "min": 0.05,
+        "max": 10.0,
+        "description": "电流限幅"
+      }
+    },
+    "update_rule": "每轮只允许小幅修改 1 到 2 个参数；如果编译、仿真或评价失败，不修改参数。"
+  },
+
+  "stop_conditions": {
+    "overall_score_min": 85,
+    "metric_error_count_max": 0
+  }
+}
